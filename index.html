@@ -17,8 +17,11 @@
         input, select, textarea { width: 100%; margin: 8px 0; padding: 12px; box-sizing: border-box; background: #2c2c2e; color: #fff; border: 1px solid #3a3a3c; border-radius: 8px; font-size: 16px; }
         .card { background: var(--card); padding: 16px; margin: 12px 0; border-radius: 12px; border-left: 4px solid var(--accent); }
         .locked { border-left-color: var(--success); opacity: 0.9; }
+        .check-group { background: #2c2c2e; padding: 10px; border-radius: 8px; margin: 10px 0; }
+        .check-item { display: flex; align-items: center; margin: 8px 0; font-size: 16px; }
+        .check-item input[type="checkbox"] { width: 25px; height: 25px; margin-right: 12px; }
         h3 { margin-top: 25px; color: var(--accent); }
-        h4 { margin-bottom: 5px; color: #eee; border-bottom: 1px solid #333; padding-bottom: 5px; }
+        h4 { margin: 15px 0 5px 0; color: #eee; border-bottom: 1px solid #333; padding-bottom: 5px; }
         small { display: block; margin-top: 4px; color: var(--text-dim); font-size: 12px; }
         hr { border: 0; border-top: 1px solid #333; margin: 20px 0; }
         @media print { body { background: white; color: black; } button, .btn-danger, hr, header { display: none !important; } .card { border: 1px solid #ccc; box-shadow: none; color: black; } }
@@ -36,7 +39,6 @@ const app = document.getElementById("app");
 const get = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch(e) { return d; } };
 const set = (k, v) => localStorage.setItem(k, JSON.stringify(v));
 
-/* START-LOGIK */
 function startApp() {
     let s = get("settings", { pinActive: true });
     if (s.pinActive) showPin(); else menu();
@@ -51,14 +53,13 @@ function checkPin() {
     if(document.getElementById("pinInput").value === PIN) menu(); else alert("Falscher PIN");
 }
 
-/* MENÜ */
 function menu() {
     app.innerHTML = `<button onclick="customers()">👥 Kundenverwaltung</button>
     <button onclick="settings()">⚙️ Grundeinstellungen</button>
     <button class="btn-sec" onclick="exportData()">💾 Daten-Backup</button>`;
 }
 
-/* EINSTELLUNGEN */
+/* SETTINGS */
 function settings() {
     let s = get("settings", { pinActive: true, rate: 50, oil: 15, coolant: 10, brake: 20, gear: 25, servo: 18, washer: 2 });
     app.innerHTML = `<h3>Grundeinstellungen</h3>
@@ -81,7 +82,7 @@ function saveSettings() {
     menu();
 }
 
-/* KUNDEN & FAHRZEUGE */
+/* KUNDEN */
 function customers() {
     let c = get("customers", []);
     let h = "<h3>Kunden</h3>";
@@ -95,6 +96,7 @@ function saveCustomer() {
     let c = get("customers", []); c.push({name: document.getElementById("cname").value, vehicles: []});
     set("customers", c); customers();
 }
+
 function openCustomer(ci) {
     let cust = get("customers", [])[ci];
     let h = `<h3>Fahrzeuge: ${cust.name}</h3>`;
@@ -114,60 +116,134 @@ function saveVehicle(ci) {
 function works(ci, vi) {
     let v = get("customers", [])[ci].vehicles[vi];
     let h = `<h3>Rapporte: ${v.brand}</h3>`;
-    v.works.forEach((w, wi) => h += `<div class="card ${w.closed?'locked':''}"><strong>${w.date} – ${w.type}</strong><button onclick="openWork(${ci},${vi},${wi})">Details</button></div>`);
+    v.works.forEach((w, wi) => h += `<div class="card ${w.closed?'locked':''}"><strong>${w.date} – ${w.types?.join(', ') || w.type}</strong><button onclick="openWork(${ci},${vi},${wi})">Details</button></div>`);
     app.innerHTML = h + `<button onclick="newWork(${ci},${vi})">+ Neuer Rapport</button><button class="btn-sec" onclick="openCustomer(${ci})">Zurück</button>`;
 }
 function newWork(ci, vi) {
     let s = get("settings", {rate:50}); let c = get("customers", []);
-    c[ci].vehicles[vi].works.push({ date: new Date().toLocaleDateString('de-CH'), km: "", type: "Service", fluids: {}, note: "", time: 0, parts: 0, rate: s.rate, prices: {...s}, closed: false });
+    c[ci].vehicles[vi].works.push({ 
+        date: new Date().toLocaleDateString('de-CH'), km: "", 
+        types: [], mfkPoints: {}, serviceFields: {inspection:0, oilFilter:0, pollenFilter:0},
+        fluids: {}, note: "", time: 0, parts: 0, rate: s.rate, prices: {...s}, closed: false 
+    });
     set("customers", c); openWork(ci, vi, c[ci].vehicles[vi].works.length - 1);
 }
 
 function openWork(ci, vi, wi) {
     let c = get("customers", []); let w = c[ci].vehicles[vi].works[wi];
     let dis = w.closed ? "disabled" : "";
-    app.innerHTML = `<h3>${w.type} – ${w.date}</h3>
-    <small>Arbeitsart</small><select ${dis} id="wtype" onchange="liveCalc(${ci},${vi},${wi})">
-        ${["Service","Reifenwechsel","MFK","Reparatur"].map(t => `<option ${w.type==t?'selected':''}>${t}</option>`).join('')}
-    </select>
-    <small>KM-Stand</small><input ${dis} id="wkm" type="number" value="${w.km}" oninput="liveCalc(${ci},${vi},${wi})">
+    
+    app.innerHTML = `<h3>Rapport – ${w.date}</h3>
+    <small>Arbeitsart (Mehrfachauswahl)</small>
+    <div class="check-group">
+        ${["Service","MFK","Reifenwechsel","Reparatur"].map(t => `
+            <label class="check-item"><input ${dis} type="checkbox" onchange="toggleType('${t}', ${ci}, ${vi}, ${wi})" ${w.types?.includes(t)?'checked':''}> ${t}</label>
+        `).join('')}
+    </div>
+
+    <small>KM-Stand</small><input ${dis} id="wkm" type="number" value="${w.km}" oninput="updateW(${ci},${vi},${wi})">
+
+    <div id="dynamicFields"></div>
+
     <h4>Flüssigkeiten (Liter)</h4>
-    ${['oil','coolant','brake','gear','servo','washer'].map(k => `<small>${k}</small><input ${dis} id="f_${k}" type="number" step="0.1" value="${w.fluids[k]||0}" oninput="liveCalc(${ci},${vi},${wi})">`).join('')}
-    <h4>Arbeit & Teile</h4>
-    <small>Stunden</small><input ${dis} id="wtime" type="number" step="0.1" value="${w.time}" oninput="liveCalc(${ci},${vi},${wi})">
-    <small>Teilekosten (CHF)</small><input ${dis} id="wparts" type="number" value="${w.parts}" oninput="liveCalc(${ci},${vi},${wi})">
-    <textarea ${dis} id="wnote" placeholder="Bemerkungen" oninput="liveCalc(${ci},${vi},${wi})">${w.note}</textarea>
+    ${['oil','coolant','brake','gear','servo','washer'].map(k => `<small>${k}</small><input ${dis} id="f_${k}" type="number" step="0.1" value="${w.fluids[k]||0}" oninput="updateW(${ci},${vi},${wi})">`).join('')}
+    
+    <h4>Manuelle Kosten</h4>
+    <small>Zusätzliche Arbeitszeit (Std)</small><input ${dis} id="wtime" type="number" step="0.1" value="${w.time}" oninput="updateW(${ci},${vi},${wi})">
+    <small>Zusätzliche Teile (CHF)</small><input ${dis} id="wparts" type="number" value="${w.parts}" oninput="updateW(${ci},${vi},${wi})">
+    
+    <textarea ${dis} id="wnote" placeholder="Bemerkungen" oninput="updateW(${ci},${vi},${wi})">${w.note}</textarea>
     <hr><div style="font-size:24px; font-weight:bold" id="liveTotal">Total: CHF ${calcTotal(w)}</div>
+    
     ${!w.closed ? `
-        <button onclick="saveWork(${ci},${vi},${wi}, false)">💾 Zwischenspeichern</button>
-        <button class="btn-save" onclick="saveWork(${ci},${vi},${wi}, true)">✅ Rapport abschliessen</button>
+        <button onclick="saveW(${ci},${vi},${wi}, false)">💾 Speichern</button>
+        <button class="btn-save" onclick="saveW(${ci},${vi},${wi}, true)">✅ Abschliessen</button>
     ` : ''}
     <button class="btn-sec" onclick="window.print()">🖨️ Drucken</button><button class="btn-sec" onclick="works(${ci},${vi})">Zurück</button>`;
+    
+    renderDynamic(ci, vi, wi);
 }
 
-function liveCalc(ci, vi, wi) {
+function toggleType(type, ci, vi, wi) {
     let c = get("customers", []); let w = c[ci].vehicles[vi].works[wi];
+    if(!w.types) w.types = [];
+    if(w.types.includes(type)) w.types = w.types.filter(t => t !== type);
+    else w.types.push(type);
+    set("customers", c);
+    renderDynamic(ci, vi, vi); // UI Refresh
+    updateW(ci, vi, wi);
+}
+
+function renderDynamic(ci, vi, wi) {
+    let c = get("customers", []); let w = c[ci].vehicles[vi].works[wi];
+    let dis = w.closed ? "disabled" : "";
+    let html = "";
+
+    if(w.types?.includes("Service")) {
+        html += `<h4>Service Details</h4>
+        <small>Jahres Inspektion (Arbeitszeit Std)</small><input ${dis} type="number" step="0.1" id="s_insp" value="${w.serviceFields?.inspection||0}" oninput="updateW(${ci},${vi},${wi})">
+        <small>Ölfilter (Preis CHF)</small><input ${dis} type="number" id="s_oilf" value="${w.serviceFields?.oilFilter||0}" oninput="updateW(${ci},${vi},${wi})">
+        <small>Pollenfilter (Preis CHF)</small><input ${dis} type="number" id="s_poll" value="${w.serviceFields?.pollenFilter||0}" oninput="updateW(${ci},${vi},${wi})">`;
+    }
+
+    if(w.types?.includes("MFK")) {
+        html += `<h4>MFK Checkliste</h4>
+        <small>MFK richten (Arbeitszeit Std)</small><input ${dis} type="number" step="0.1" id="m_prep" value="${w.mfkPrepTime||0}" oninput="updateW(${ci},${vi},${wi})">
+        <div class="check-group">
+            ${["Licht geprüft","Licht eingestellt","Leuchtweitenregulierung","Bremsen geprüft","Horn geprüft","Lenkradsperre","Scheibenwischer","Auspuff geprüft","Reifen geprüft","Frontscheibe & Beleuchtung","Motor & Karosserie gereinigt"].map(p => `
+                <label class="check-item"><input ${dis} type="checkbox" onchange="toggleMfk('${p}', ${ci}, ${vi}, ${wi})" ${w.mfkPoints?.[p]?'checked':''}> ${p}</label>
+            `).join('')}
+        </div>`;
+    }
+    document.getElementById("dynamicFields").innerHTML = html;
+}
+
+function toggleMfk(point, ci, vi, wi) {
+    let c = get("customers", []); let w = c[ci].vehicles[vi].works[wi];
+    if(!w.mfkPoints) w.mfkPoints = {};
+    w.mfkPoints[point] = !w.mfkPoints[point];
+    set("customers", c);
+}
+
+function updateW(ci, vi, wi) {
+    let c = get("customers", []); let w = c[ci].vehicles[vi].works[wi];
+    w.km = document.getElementById("wkm").value;
     w.time = +document.getElementById("wtime").value;
     w.parts = +document.getElementById("wparts").value;
+    w.note = document.getElementById("wnote").value;
     ['oil','coolant','brake','gear','servo','washer'].forEach(k => w.fluids[k] = document.getElementById("f_"+k).value);
+    
+    if(w.types?.includes("Service")) {
+        w.serviceFields = {
+            inspection: +document.getElementById("s_insp").value,
+            oilFilter: +document.getElementById("s_oilf").value,
+            pollenFilter: +document.getElementById("s_poll").value
+        };
+    }
+    if(w.types?.includes("MFK")) {
+        w.mfkPrepTime = +document.getElementById("m_prep").value;
+    }
     document.getElementById("liveTotal").innerText = "Total: CHF " + calcTotal(w);
+    set("customers", c);
 }
 
 function calcTotal(w) {
-    let fT = 0; for(let k in w.prices) { if(k!=='rate' && k!=='pinActive') fT += (parseFloat(w.fluids[k])||0) * (w.prices[k]||0); }
-    return ( (w.time * w.rate) + fT + (+w.parts || 0) ).toFixed(2);
+    let fT = 0; 
+    for(let k in w.prices) { if(k!=='rate' && k!=='pinActive') fT += (parseFloat(w.fluids[k])||0) * (w.prices[k]||0); }
+    
+    let serviceExtra = (w.serviceFields?.inspection || 0) * w.rate + (w.serviceFields?.oilFilter || 0) + (w.serviceFields?.pollenFilter || 0);
+    let mfkExtra = (w.mfkPrepTime || 0) * w.rate;
+    
+    return ( (w.time * w.rate) + fT + (+w.parts || 0) + serviceExtra + mfkExtra ).toFixed(2);
 }
 
-function saveWork(ci, vi, wi, close) {
-    if(close && !confirm("Abschliessen? Danach keine Änderungen mehr möglich.")) return;
-    let c = get("customers", []); let w = c[ci].vehicles[vi].works[wi];
-    w.type = document.getElementById("wtype").value; w.km = document.getElementById("wkm").value;
-    w.time = +document.getElementById("wtime").value; w.parts = +document.getElementById("wparts").value;
-    w.note = document.getElementById("wnote").value;
-    ['oil','coolant','brake','gear','servo','washer'].forEach(k => w.fluids[k] = document.getElementById("f_"+k).value);
-    if(close) w.closed = true;
-    set("customers", c);
-    if(close) works(ci, vi); else alert("Gespeichert");
+function saveW(ci, vi, wi, close) {
+    if(close && !confirm("Abschliessen?")) return;
+    updateW(ci, vi, wi);
+    if(close) {
+        let c = get("customers", []); c[ci].vehicles[vi].works[wi].closed = true;
+        set("customers", c); works(ci, vi);
+    } else alert("Gespeichert");
 }
 
 function exportData() {
