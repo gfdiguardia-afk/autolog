@@ -5,19 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AutoLog</title>
 <style>
-body { margin:0; font-family:Arial; background:#111; color:#eee; }
-header { background:#000; padding:15px; text-align:center; font-size:20px; }
-.container { padding:15px; }
-button,input,select,textarea {
-  width:100%; margin:6px 0; padding:12px;
-  background:#1f1f1f; color:white;
-  border:1px solid #444; border-radius:6px;
+body{margin:0;font-family:Arial;background:#111;color:#eee}
+header{background:#000;padding:15px;text-align:center;font-size:20px}
+.container{padding:15px}
+button,input,select,textarea{
+ width:100%;margin:6px 0;padding:12px;
+ background:#1f1f1f;color:#fff;border:1px solid #444;border-radius:6px
 }
-textarea { min-height:80px; }
-.card { background:#1c1c1c; padding:12px; margin:10px 0; border-radius:8px; }
-.locked { opacity:0.6; }
-small { color:#aaa; }
-hr { border:0; border-top:1px solid #333; margin:15px 0; }
+textarea{min-height:80px}
+.card{background:#1c1c1c;padding:12px;margin:10px 0;border-radius:8px}
+small{color:#aaa}
+.locked{opacity:.6}
+hr{border:0;border-top:1px solid #333;margin:15px 0}
+.danger{background:#400}
 </style>
 </head>
 <body>
@@ -26,214 +26,275 @@ hr { border:0; border-top:1px solid #333; margin:15px 0; }
 <div class="container" id="app"></div>
 
 <script>
-const PIN = "1234";
-const app = document.getElementById("app");
+const PIN="1234";
+const app=document.getElementById("app");
 
-/* Helpers */
-const get = (k,d)=>JSON.parse(localStorage.getItem(k))||d;
-const set = (k,v)=>localStorage.setItem(k,JSON.stringify(v));
+const get=(k,d)=>JSON.parse(localStorage.getItem(k))||d;
+const set=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
 
-/* Login */
+/* LOGIN */
 function showPin(){
-  app.innerHTML=`
-    <h3>PIN</h3>
-    <input id="p" type="password">
-    <button onclick="p.value===PIN?menu():alert('Falscher PIN')">Öffnen</button>`;
+ app.innerHTML=`
+ <h3>PIN</h3>
+ <input id="pin" type="password">
+ <button onclick="pin.value===PIN?menu():alert('Falscher PIN')">Öffnen</button>`;
 }
 
-/* Menu */
+/* MENU */
 function menu(){
-  app.innerHTML=`
-    <button onclick="customers()">Kunden</button>
-    <button onclick="settings()">Einstellungen</button>`;
+ app.innerHTML=`
+ <button onclick="customers()">Kunden</button>
+ <button onclick="settings()">Einstellungen</button>`;
 }
 
-/* Settings */
+/* SETTINGS */
 function settings(){
-  let s=get("settings",{
-    rate:50,
-    oil:15,coolant:10,brake:20,gear:25,servo:18,washer:2
-  });
-  app.innerHTML=`
-    <h3>Grundeinstellungen</h3>
-    <input id="rate" value="${s.rate}" placeholder="Stundenansatz CHF/h">
-    <h4>Preis pro Liter CHF</h4>
-    <input id="oil" value="${s.oil}" placeholder="Motoröl">
-    <input id="coolant" value="${s.coolant}" placeholder="Kühlmittel">
-    <input id="brake" value="${s.brake}" placeholder="Bremsflüssigkeit">
-    <input id="gear" value="${s.gear}" placeholder="Getriebeöl">
-    <input id="servo" value="${s.servo}" placeholder="Servolenkungsöl">
-    <input id="washer" value="${s.washer}" placeholder="Scheibenwischwasser">
-    <button onclick="saveSettings()">Speichern</button>
-    <button onclick="menu()">Zurück</button>`;
+ let s=get("settings",{
+  rate:50,
+  oil:15,coolant:10,brake:20,gear:25,servo:18,washer:2
+ });
+ app.innerHTML=`
+ <h3>Grundeinstellungen</h3>
+
+ <b>Stundenansatz</b>
+ <small>CHF pro Stunde</small>
+ <input id="rate" value="${s.rate}">
+
+ <hr>
+
+ <b>Motoröl</b>
+ <small>Preis pro Liter CHF</small>
+ <input id="oil" value="${s.oil}">
+
+ <b>Kühlmittel</b>
+ <small>Preis pro Liter CHF</small>
+ <input id="coolant" value="${s.coolant}">
+
+ <b>Bremsflüssigkeit</b>
+ <small>Preis pro Liter CHF</small>
+ <input id="brake" value="${s.brake}">
+
+ <b>Getriebeöl</b>
+ <small>Preis pro Liter CHF</small>
+ <input id="gear" value="${s.gear}">
+
+ <b>Servolenkungsöl</b>
+ <small>Preis pro Liter CHF</small>
+ <input id="servo" value="${s.servo}">
+
+ <b>Scheibenwischwasser</b>
+ <small>Preis pro Liter CHF</small>
+ <input id="washer" value="${s.washer}">
+
+ <button onclick="saveSettings()">Speichern</button>
+ <button onclick="menu()">Zurück</button>`;
 }
 function saveSettings(){
-  set("settings",{
-    rate:+rate.value,
-    oil:+oil.value,coolant:+coolant.value,
-    brake:+brake.value,gear:+gear.value,
-    servo:+servo.value,washer:+washer.value
-  });
-  menu();
+ set("settings",{
+  rate:+rate.value,
+  oil:+oil.value,coolant:+coolant.value,
+  brake:+brake.value,gear:+gear.value,
+  servo:+servo.value,washer:+washer.value
+ });
+ menu();
 }
 
-/* Customers */
+/* CUSTOMERS */
 function customers(){
-  let c=get("customers",[]);
-  let h="<h3>Kunden</h3>";
-  c.forEach((x,i)=>h+=`
-    <div class="card"><b>${x.name}</b>
-    <button onclick="openCustomer(${i})">Öffnen</button></div>`);
-  app.innerHTML=h+`
-    <button onclick="newCustomer()">Neuer Kunde</button>
-    <button onclick="menu()">Zurück</button>`;
+ let c=get("customers",[]);
+ let h="<h3>Kunden</h3>";
+ c.forEach((x,i)=>h+=`
+ <div class="card">
+  <b>${x.name}</b>
+  <button onclick="openCustomer(${i})">Öffnen</button>
+ </div>`);
+ app.innerHTML=h+`
+ <button onclick="newCustomer()">Neuer Kunde</button>
+ <button onclick="menu()">Zurück</button>`;
 }
+
 function newCustomer(){
-  app.innerHTML=`
-    <h3>Neuer Kunde</h3>
-    <input id="n" placeholder="Name">
-    <button onclick="saveCustomer()">Speichern</button>`;
+ app.innerHTML=`
+ <h3>Neuer Kunde</h3>
+ <input id="name" placeholder="Name">
+ <button onclick="saveCustomer()">Speichern</button>`;
 }
 function saveCustomer(){
-  let c=get("customers",[]);
-  c.push({name:n.value,vehicles:[]});
-  set("customers",c); customers();
+ let c=get("customers",[]);
+ c.push({name:name.value,vehicles:[]});
+ set("customers",c);customers();
 }
 
-/* Vehicles */
-function openCustomer(i){
-  let c=get("customers",[])[i];
-  let h=`<h3>${c.name}</h3>`;
-  c.vehicles.forEach((v,vi)=>h+=`
-    <div class="card">${v.brand} ${v.model}<br><small>${v.plate}</small>
-    <button onclick="works(${i},${vi})">Rapporte</button></div>`);
-  app.innerHTML=h+`
-    <button onclick="newVehicle(${i})">Fahrzeug hinzufügen</button>
-    <button onclick="customers()">Zurück</button>`;
+/* VEHICLES */
+function openCustomer(ci){
+ let c=get("customers",[]);
+ let cust=c[ci];
+ let h=`<h3>${cust.name}</h3>`;
+ cust.vehicles.forEach((v,vi)=>h+=`
+ <div class="card">
+  ${v.brand} ${v.model}<br><small>${v.plate}</small>
+  <button onclick="works(${ci},${vi})">Rapporte</button>
+ </div>`);
+ app.innerHTML=h+`
+ <button onclick="newVehicle(${ci})">Fahrzeug hinzufügen</button>
+ <button class="danger" onclick="deleteCustomer(${ci})">Kunde löschen</button>
+ <button onclick="customers()">Zurück</button>`;
 }
+
+function deleteCustomer(ci){
+ if(confirm("Kunde inkl. aller Fahrzeuge & Rapporte löschen?")){
+  let c=get("customers",[]);
+  c.splice(ci,1);
+  set("customers",c);
+  customers();
+ }
+}
+
 function newVehicle(ci){
-  app.innerHTML=`
-    <h3>Fahrzeug</h3>
-    <input id="b" placeholder="Marke">
-    <input id="m" placeholder="Modell">
-    <input id="p" placeholder="Kennzeichen">
-    <button onclick="saveVehicle(${ci})">Speichern</button>`;
+ app.innerHTML=`
+ <h3>Fahrzeug</h3>
+ <input id="brand" placeholder="Marke">
+ <input id="model" placeholder="Modell">
+ <input id="plate" placeholder="Kennzeichen">
+ <button onclick="saveVehicle(${ci})">Speichern</button>`;
 }
 function saveVehicle(ci){
-  let c=get("customers",[]);
-  c[ci].vehicles.push({brand:b.value,model:m.value,plate:p.value,works:[]});
-  set("customers",c); openCustomer(ci);
+ let c=get("customers",[]);
+ c[ci].vehicles.push({
+  brand:brand.value,model:model.value,plate:plate.value,works:[]
+ });
+ set("customers",c);
+ openCustomer(ci);
 }
 
-/* Works */
+/* WORKS LIST */
 function works(ci,vi){
-  let v=get("customers",[])[ci].vehicles[vi];
-  let h="<h3>Rapporte</h3>";
-  v.works.forEach((w,i)=>h+=`
-    <div class="card ${w.closed?'locked':''}">
-    ${w.date} – ${w.type}<br>
-    <small>Status: ${w.closed?'Abgeschlossen':'Entwurf'}</small>
-    <button onclick="openWork(${ci},${vi},${i})">Öffnen</button></div>`);
-  app.innerHTML=h+`
-    <button onclick="newWork(${ci},${vi})">Neuer Rapport</button>
-    <button onclick="openCustomer(${ci})">Zurück</button>`;
+ let v=get("customers",[])[ci].vehicles[vi];
+ let h="<h3>Rapporte</h3>";
+ v.works.forEach((w,wi)=>h+=`
+ <div class="card ${w.closed?'locked':''}">
+  ${w.date} – ${w.type}<br>
+  <small>${w.closed?'Abgeschlossen':'Entwurf'}</small>
+  <button onclick="openWork(${ci},${vi},${wi})">Öffnen</button>
+ </div>`);
+ app.innerHTML=h+`
+ <button onclick="newWork(${ci},${vi})">Neuer Rapport</button>
+ <button onclick="openCustomer(${ci})">Zurück</button>`;
 }
 
-/* New Work */
+/* NEW WORK */
 function newWork(ci,vi){
-  let s=get("settings",{});
-  let work={
-    date:new Date().toLocaleDateString(),
-    km:"",type:"Service",
-    checklist:{},fluids:{},
-    note:"",time:0,parts:0,
-    rate:s.rate,prices:s,
-    closed:false
-  };
-  let c=get("customers",[]);
-  c[ci].vehicles[vi].works.push(work);
-  set("customers",c);
-  openWork(ci,vi,c[ci].vehicles[vi].works.length-1);
+ let s=get("settings",{});
+ let w={
+  date:new Date().toLocaleDateString(),
+  km:"",type:"Service",
+  fluids:{},note:"",
+  time:0,parts:0,
+  rate:s.rate,prices:{...s},
+  closed:false
+ };
+ let c=get("customers",[]);
+ c[ci].vehicles[vi].works.push(w);
+ set("customers",c);
+ openWork(ci,vi,c[ci].vehicles[vi].works.length-1);
 }
 
-/* Open Work */
+/* OPEN WORK */
 function openWork(ci,vi,wi){
-  let c=get("customers",[]);
-  let w=c[ci].vehicles[vi].works[wi];
-  let disabled=w.closed?"disabled":"";
-  app.innerHTML=`
-<h3>${w.type} – ${w.date}</h3>
-<input ${disabled} id="km" value="${w.km}" placeholder="Kilometer">
-<select ${disabled} id="type" onchange="w.type=this.value">
-<option>Service</option><option>Reifenwechsel</option>
-<option>MFK</option><option>Reparatur</option></select>
+ let c=get("customers",[]);
+ let w=c[ci].vehicles[vi].works[wi];
+ let dis=w.closed?"disabled":"";
+ app.innerHTML=`
+ <h3>${w.type} – ${w.date}</h3>
 
-<h4>Flüssigkeiten (Liter)</h4>
-${fluid("Motoröl","oil")}
-${fluid("Kühlmittel","coolant")}
-${fluid("Bremsflüssigkeit","brake")}
-${fluid("Getriebeöl","gear")}
-${fluid("Servolenkungsöl","servo")}
-${fluid("Scheibenwischwasser","washer")}
+ <small>Kilometerstand</small>
+ <input ${dis} id="km" value="${w.km}">
 
-<h4>Bemerkungen</h4>
-<textarea ${disabled} id="note">${w.note}</textarea>
+ <small>Arbeitsart</small>
+ <select ${dis} id="type">
+  <option ${w.type=="Service"?"selected":""}>Service</option>
+  <option ${w.type=="Reifenwechsel"?"selected":""}>Reifenwechsel</option>
+  <option ${w.type=="MFK"?"selected":""}>MFK</option>
+  <option ${w.type=="Reparatur"?"selected":""}>Reparatur</option>
+ </select>
 
-<h4>Arbeitszeit</h4>
-<input ${disabled} id="time" value="${w.time}" placeholder="Stunden">
-<input ${disabled} id="parts" value="${w.parts}" placeholder="Teilekosten CHF">
+ <h4>Flüssigkeiten (Liter)</h4>
+ ${fluid("Motoröl","oil",w)}
+ ${fluid("Kühlmittel","coolant",w)}
+ ${fluid("Bremsflüssigkeit","brake",w)}
+ ${fluid("Getriebeöl","gear",w)}
+ ${fluid("Servolenkungsöl","servo",w)}
+ ${fluid("Scheibenwischwasser","washer",w)}
 
-<hr>
-<b>Total CHF: ${calc(w)}</b>
+ <h4>Bemerkungen</h4>
+ <textarea ${dis} id="note">${w.note}</textarea>
 
-${!w.closed?`<button onclick="closeWork(${ci},${vi},${wi})">Rapport abschliessen</button>`:""}
-<button onclick="saveWork(${ci},${vi},${wi})">Speichern</button>
-<button onclick="works(${ci},${vi})">Zurück</button>`;
+ <h4>Arbeitszeit</h4>
+ <small>Stunden</small>
+ <input ${dis} id="time" value="${w.time}">
+ <small>Teilekosten CHF</small>
+ <input ${dis} id="parts" value="${w.parts}">
+
+ <hr>
+ <b>Total CHF: ${calc(w)}</b>
+
+ ${!w.closed?`
+ <button onclick="closeWork(${ci},${vi},${wi})">Rapport abschliessen</button>
+ <button class="danger" onclick="deleteWork(${ci},${vi},${wi})">Rapport löschen</button>
+ `:""}
+
+ <button onclick="saveWork(${ci},${vi},${wi})">Speichern</button>
+ <button onclick="works(${ci},${vi})">Zurück</button>`;
 }
 
-function fluid(name,key){
-  let w=currentWork();
-  return `<label>${name}</label>
-<input ${w.closed?"disabled":""} placeholder="Liter" value="${w.fluids[key]||""}" 
-oninput="w.fluids['${key}']=this.value">`;
+function fluid(label,key,w){
+ return `
+ <small>${label} – Liter</small>
+ <input ${w.closed?"disabled":""} value="${w.fluids[key]||""}"
+ oninput="w.fluids['${key}']=this.value">`;
 }
 
-function currentWork(){
-  let c=get("customers",[]);
-  return c.flatMap(x=>x.vehicles.flatMap(v=>v.works))
-         .find(w=>!w.closed||true);
-}
-
+/* CALC */
 function calc(w){
-  let f=0;
-  for(let k in w.fluids){
-    let l=parseFloat(w.fluids[k])||0;
-    f+=l*(w.prices[k]||0);
-  }
-  return (w.time*w.rate + f + (+w.parts||0)).toFixed(2);
+ let f=0;
+ for(let k in w.fluids){
+  let l=parseFloat(w.fluids[k])||0;
+  f+=l*(w.prices[k]||0);
+ }
+ return (w.time*w.rate + f + (+w.parts||0)).toFixed(2);
 }
 
+/* SAVE / DELETE / CLOSE */
 function saveWork(ci,vi,wi){
-  let c=get("customers",[]);
-  let w=c[ci].vehicles[vi].works[wi];
-  if(!w.closed){
-    w.km=km.value;
-    w.type=type.value;
-    w.note=note.value;
-    w.time=+time.value||0;
-    w.parts=+parts.value||0;
-  }
-  set("customers",c);
-  works(ci,vi);
+ let c=get("customers",[]);
+ let w=c[ci].vehicles[vi].works[wi];
+ if(!w.closed){
+  w.km=km.value;
+  w.type=type.value;
+  w.note=note.value;
+  w.time=+time.value||0;
+  w.parts=+parts.value||0;
+ }
+ set("customers",c);
+ works(ci,vi);
 }
 
 function closeWork(ci,vi,wi){
-  if(confirm("Rapport wirklich abschliessen? Danach nicht mehr änderbar.")){
-    let c=get("customers",[]);
-    c[ci].vehicles[vi].works[wi].closed=true;
-    set("customers",c);
-    works(ci,vi);
-  }
+ if(confirm("Rapport wirklich abschliessen? Danach nicht mehr änderbar.")){
+  let c=get("customers",[]);
+  c[ci].vehicles[vi].works[wi].closed=true;
+  set("customers",c);
+  works(ci,vi);
+ }
+}
+
+function deleteWork(ci,vi,wi){
+ if(confirm("Rapport löschen?")){
+  let c=get("customers",[]);
+  c[ci].vehicles[vi].works.splice(wi,1);
+  set("customers",c);
+  works(ci,vi);
+ }
 }
 
 showPin();
