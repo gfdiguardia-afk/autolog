@@ -8,12 +8,14 @@
         :root {
             --bg: #121212; --card: #1e1e1e; --accent: #007aff;
             --danger: #ff3b30; --success: #34c759; --text: #ffffff; --text-dim: #b0b0b0;
+            --work-btn: #5856d6;
         }
         body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica; background: var(--bg); color: var(--text); padding-bottom: 50px; }
         header { background: #000; padding: 20px; text-align: center; font-weight: bold; font-size: 22px; border-bottom: 1px solid #333; position: sticky; top: 0; z-index: 100; }
         .container { padding: 15px; max-width: 600px; margin: auto; }
         button { width: 100%; margin: 8px 0; padding: 14px; border: none; border-radius: 10px; background: var(--accent); color: white; font-size: 16px; font-weight: 600; cursor: pointer; }
         .btn-sec { background: #333; } .btn-danger { background: var(--danger); } .btn-save { background: var(--success); }
+        .btn-work { background: var(--work-btn); }
         .btn-qty { width: auto; padding: 8px 15px; margin: 0 2px; background: #3a3a3c; font-size: 14px; }
         .btn-qty.active { background: var(--accent); }
         input, select, textarea { width: 100%; margin: 8px 0; padding: 12px; box-sizing: border-box; background: #2c2c2e; color: #fff; border: 1px solid #3a3a3c; border-radius: 8px; font-size: 16px; }
@@ -28,7 +30,7 @@
         h4 { margin: 15px 0 5px 0; color: #eee; border-bottom: 1px solid #333; padding-bottom: 5px; }
         small { display: block; margin-top: 4px; color: var(--text-dim); font-size: 12px; }
         hr { border: 0; border-top: 1px solid #333; margin: 20px 0; }
-        .tire-row { border-bottom: 1px solid #333; padding: 10px 0; }
+        .btn-minus { width: 44px; height: 44px; padding: 0; flex-shrink: 0; margin: 0; display: flex; align-items: center; justify-content: center; font-size: 24px; }
     </style>
 </head>
 <body>
@@ -107,7 +109,7 @@ function newVehicle(ci) { app.innerHTML = `<h3>Neues Fahrzeug</h3><input id="vbr
 function saveVehicle(ci) { let c = get("customers", []); c[ci].vehicles.push({ brand: document.getElementById("vbrand").value, model: document.getElementById("vmodel").value, plate: document.getElementById("vplate").value, works: [] }); set("customers", c); openCustomer(ci); }
 
 function works(ci, vi) { let v = get("customers", [])[ci].vehicles[vi]; let h = `<h3>Rapporte: ${v.brand}</h3>`; v.works.forEach((w, wi) => h += `<div class="card ${w.closed?'locked':''}"><strong>${w.date} – ${w.types?.join(', ') || 'Rapport'}</strong><button onclick="openWork(${ci},${vi},${wi})">Details</button></div>`); app.innerHTML = h + `<button onclick="newWork(${ci},${vi})">+ Neuer Rapport</button><button class="btn-sec" onclick="openCustomer(${ci})">Zurück</button>`; }
-function newWork(ci, vi) { let s = get("settings", {rate:50}); let c = get("customers", []); c[ci].vehicles[vi].works.push({ date: new Date().toLocaleDateString('de-CH'), km: "", types: [], mfkPoints: {}, tireData: {}, serviceFields: {}, fluids: {}, note: "", time: 0, partsList: [{t:"",p:0}], rate: s.rate, prices: {...s}, closed: false }); set("customers", c); openWork(ci, vi, c[ci].vehicles[vi].works.length - 1); }
+function newWork(ci, vi) { let s = get("settings", {rate:50}); let c = get("customers", []); c[ci].vehicles[vi].works.push({ date: new Date().toLocaleDateString('de-CH'), km: "", types: [], mfkPoints: {}, tireData: {}, serviceFields: {}, fluids: {}, note: "", time: 0, partsList: [], workList: [], rate: s.rate, prices: {...s}, closed: false }); set("customers", c); openWork(ci, vi, c[ci].vehicles[vi].works.length - 1); }
 
 function openWork(ci, vi, wi) {
     let c = get("customers", []); let w = c[ci].vehicles[vi].works[wi]; let dis = w.closed ? "disabled" : "";
@@ -118,9 +120,16 @@ function openWork(ci, vi, wi) {
     </div>
     <small>KM-Stand *</small><input ${dis} id="wkm" type="number" placeholder="Zwingend" value="${w.km}" oninput="updateW(${ci},${vi},${wi})">
     <div id="dynamicFields"></div><div id="fluidSection"></div>
+    
     <div id="repairSection" style="display:${w.types?.includes('Reparatur')?'block':'none'}">
-        <h4>Sonstige Teile</h4><div id="partsContainer"></div><button ${dis} class="btn-sec" style="width:50px" onclick="addPartRow(${ci},${vi},${wi})">+</button>
+        <h4>Sonstige Teile / Arbeit</h4>
+        <div id="partsContainer"></div>
+        <div class="row-flex">
+            <button ${dis} class="btn-save" onclick="addPartRow(${ci},${vi},${wi})">+ Teile</button>
+            <button ${dis} class="btn-work" onclick="addWorkRow(${ci},${vi},${wi})">+ Arbeit</button>
+        </div>
     </div>
+
     <h4>Zusätzliche Arbeitszeit</h4><input ${dis} id="wtime" type="number" step="0.1" placeholder="Std" value="${w.time||''}" oninput="updateW(${ci},${vi},${wi})">
     <textarea ${dis} id="wnote" placeholder="Bemerkungen" oninput="updateW(${ci},${vi},${wi})">${w.note}</textarea>
     <hr><div style="font-size:24px; font-weight:bold; color:var(--success)" id="liveTotal">Total: CHF ${calcTotal(w)}</div>
@@ -174,9 +183,40 @@ function renderDynamic(ci, vi, wi) {
 }
 
 function setTireQty(k, q, ci, vi, wi) { let c = get("customers", []); c[ci].vehicles[vi].works[wi].tireData[k] = +q; set("customers", c); renderDynamic(ci, vi, wi); updateW(ci, vi, wi); }
-function renderParts(ci, vi, wi) { let w = get("customers", [])[ci].vehicles[vi].works[wi]; let dis = w.closed ? "disabled" : ""; document.getElementById("partsContainer").innerHTML = w.partsList.map((p, i) => `<div class="row-flex"><input ${dis} placeholder="Teil" value="${p.t}" oninput="updatePart(${ci},${vi},${wi},${i},'t',this.value)"><input ${dis} type="number" placeholder="CHF" value="${p.p||''}" oninput="updatePart(${ci},${vi},${wi},${i},'p',this.value)"></div>`).join(''); }
+
+function renderParts(ci, vi, wi) { 
+    let w = get("customers", [])[ci].vehicles[vi].works[wi]; 
+    let dis = w.closed ? "disabled" : ""; 
+    let html = "";
+    
+    // Teile und Arbeit zusammen im Container rendern
+    w.partsList.forEach((p, i) => {
+        html += `<div class="row-flex">
+            <input ${dis} placeholder="Teil Bezeichnung" value="${p.t}" oninput="updatePart(${ci},${vi},${wi},${i},'t',this.value)">
+            <input ${dis} type="number" placeholder="CHF" style="width:100px" value="${p.p||''}" oninput="updatePart(${ci},${vi},${wi},${i},'p',this.value)">
+            <button ${dis} class="btn-danger btn-minus" onclick="removePartRow(${ci},${vi},${wi},${i})">-</button>
+        </div>`;
+    });
+
+    w.workList.forEach((work, i) => {
+        html += `<div class="row-flex">
+            <input ${dis} placeholder="Arbeit Bezeichnung" value="${work.t}" oninput="updateWorkRowItem(${ci},${vi},${wi},${i},'t',this.value)">
+            <input ${dis} type="number" step="0.1" placeholder="Std" style="width:100px" value="${work.h||''}" oninput="updateWorkRowItem(${ci},${vi},${wi},${i},'h',this.value)">
+            <button ${dis} class="btn-danger btn-minus" onclick="removeWorkRow(${ci},${vi},${wi},${i})">-</button>
+        </div>`;
+    });
+
+    document.getElementById("partsContainer").innerHTML = html;
+}
+
 function addPartRow(ci, vi, wi) { let c = get("customers", []); c[ci].vehicles[vi].works[wi].partsList.push({t:"",p:0}); set("customers", c); renderParts(ci, vi, wi); }
+function removePartRow(ci, vi, wi, i) { let c = get("customers", []); c[ci].vehicles[vi].works[wi].partsList.splice(i, 1); set("customers", c); renderParts(ci, vi, wi); updateW(ci, vi, wi); }
+
+function addWorkRow(ci, vi, wi) { let c = get("customers", []); c[ci].vehicles[vi].works[wi].workList.push({t:"",h:0}); set("customers", c); renderParts(ci, vi, wi); }
+function removeWorkRow(ci, vi, wi, i) { let c = get("customers", []); c[ci].vehicles[vi].works[wi].workList.splice(i, 1); set("customers", c); renderParts(ci, vi, wi); updateW(ci, vi, wi); }
+
 function updatePart(ci, vi, wi, i, k, v) { let c = get("customers", []); c[ci].vehicles[vi].works[wi].partsList[i][k] = k==='p'?+v:v; set("customers", c); updateW(ci, vi, wi); }
+function updateWorkRowItem(ci, vi, wi, i, k, v) { let c = get("customers", []); c[ci].vehicles[vi].works[wi].workList[i][k] = k==='h'?+v:v; set("customers", c); updateW(ci, vi, wi); }
 
 function toggleType(t,ci,vi,wi) { 
     let c = get("customers", []); let w = c[ci].vehicles[vi].works[wi]; 
@@ -206,11 +246,12 @@ function updateW(ci,vi,wi) {
 function calcTotal(w) {
     let fT = 0; Object.keys(LABELS).forEach(k => fT += (parseFloat(w.fluids[k])||0) * (w.prices[k]||0));
     let pT = w.partsList.reduce((sum, p) => sum + (+p.p || 0), 0);
+    let workListTotal = (w.workList || []).reduce((sum, wk) => sum + ((+wk.h || 0) * w.rate), 0);
     let sE = (w.serviceFields.inspection||0)*w.rate + (w.serviceFields.oilFilter||0) + (w.serviceFields.pollenFilter||0) + (w.serviceFields.airFilter||0) + (w.serviceFields.fuelFilter||0) + (w.serviceFields.plugs||0) + (w.serviceFields.plugsT||0)*w.rate + (w.serviceFields.belt||0) + (w.serviceFields.beltT||0)*w.rate + (w.serviceFields.pump||0) + (w.serviceFields.ribbedM||0);
     let mE = (w.mfkPrepTime || 0) * w.rate;
     let cleanE = (w.mfkPoints["Motor & Karosserie gereinigt"]) ? (w.prices.cleanPrice || 0) : 0;
     let tireE = 0; Object.keys(TIRE_LABELS).forEach(k => tireE += (w.tireData[k] || 0) * (w.prices[k] || 0));
-    return ( (w.time * w.rate) + fT + pT + sE + mE + cleanE + tireE ).toFixed(2);
+    return ( (w.time * w.rate) + fT + pT + workListTotal + sE + mE + cleanE + tireE ).toFixed(2);
 }
 
 function saveW(ci, vi, wi, close) {
