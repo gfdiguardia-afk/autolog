@@ -4,300 +4,323 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AutoLog</title>
+
 <style>
-body{margin:0;font-family:Arial;background:#111;color:#eee}
-header{background:#000;padding:15px;text-align:center;font-size:20px}
-.container{padding:15px}
-button,input,select,textarea{
- width:100%;margin:6px 0;padding:12px;
- background:#1f1f1f;color:#fff;border:1px solid #444;border-radius:6px
+body {
+  font-family: Arial, sans-serif;
+  background: #111;
+  color: #eee;
+  padding: 15px;
 }
-textarea{min-height:80px}
-.card{background:#1c1c1c;padding:12px;margin:10px 0;border-radius:8px}
-small{color:#aaa}
-.locked{opacity:.6}
-hr{border:0;border-top:1px solid #333;margin:15px 0}
-.danger{background:#400}
+
+h1, h2, h3 {
+  color: #fff;
+}
+
+input, select, button, textarea {
+  width: 100%;
+  margin: 6px 0;
+  padding: 8px;
+  background: #222;
+  color: #fff;
+  border: 1px solid #444;
+  border-radius: 5px;
+}
+
+button {
+  background: #0a84ff;
+  border: none;
+  cursor: pointer;
+}
+
+button.danger {
+  background: #c0392b;
+}
+
+.section {
+  border: 1px solid #333;
+  padding: 10px;
+  margin-bottom: 15px;
+  border-radius: 6px;
+}
+
+label {
+  display: block;
+  margin: 4px 0;
+}
 </style>
 </head>
+
 <body>
 
-<header>AutoLog</header>
-<div class="container" id="app"></div>
+<h1>🚗 AutoLog</h1>
+
+<div id="app"></div>
 
 <script>
-const PIN="1234";
-const app=document.getElementById("app");
+/* ------------------ DATEN ------------------ */
 
-const get=(k,d)=>JSON.parse(localStorage.getItem(k))||d;
-const set=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
+let daten = JSON.parse(localStorage.getItem("autolog")) || {
+  kunden: [],
+  settings: {
+    stundensatz: 50,
+    fluessigkeiten: {
+      oel: 10,
+      brems: 15,
+      kuehl: 8
+    }
+  }
+};
 
-/* LOGIN */
-function showPin(){
- app.innerHTML=`
- <h3>PIN</h3>
- <input id="pin" type="password">
- <button onclick="pin.value===PIN?menu():alert('Falscher PIN')">Öffnen</button>`;
+let aktKunde = null;
+let aktFahrzeug = null;
+let aktRapport = null;
+
+/* ------------------ CHECKLISTEN ------------------ */
+
+const CHECKLISTEN = {
+  service: [
+    "Ölwechsel",
+    "Ölfilter ersetzt",
+    "Luftfilter ersetzt",
+    "Pollenfilter ersetzt",
+    "Bremsen vorne geprüft",
+    "Bremsen hinten geprüft",
+    "Zahnriemen geprüft"
+  ],
+  mfk: [
+    "Licht geprüft",
+    "Leuchtweitenregulierung geprüft",
+    "Bremsen geprüft",
+    "Horn geprüft",
+    "Lenkradsperre geprüft",
+    "Scheibenwischer geprüft",
+    "Auspuff geprüft",
+    "Reifen geprüft"
+  ],
+  reifenwechsel: [
+    "Sommerreifen montiert",
+    "Winterreifen montiert",
+    "Reifendruck geprüft",
+    "Radschrauben nachgezogen"
+  ]
+};
+
+/* ------------------ SPEICHERN ------------------ */
+
+function speichern() {
+  localStorage.setItem("autolog", JSON.stringify(daten));
 }
 
-/* MENU */
-function menu(){
- app.innerHTML=`
- <button onclick="customers()">Kunden</button>
- <button onclick="settings()">Einstellungen</button>`;
+/* ------------------ START ------------------ */
+
+start();
+
+function start() {
+  const app = document.getElementById("app");
+  app.innerHTML = `
+    <button onclick="kundeNeu()">➕ Neuer Kunde</button>
+    <h2>Kunden</h2>
+    ${daten.kunden.map((k,i)=>`
+      <button onclick="kundeOeffnen(${i})">${k.name}</button>
+    `).join("")}
+  `;
 }
 
-/* SETTINGS */
-function settings(){
- let s=get("settings",{
-  rate:50,
-  oil:15,coolant:10,brake:20,gear:25,servo:18,washer:2
- });
- app.innerHTML=`
- <h3>Grundeinstellungen</h3>
+/* ------------------ KUNDEN ------------------ */
 
- <b>Stundenansatz</b>
- <small>CHF pro Stunde</small>
- <input id="rate" value="${s.rate}">
+function kundeNeu() {
+  const name = prompt("Name Kunde:");
+  if (!name) return;
 
- <hr>
+  daten.kunden.push({
+    name: name,
+    fahrzeuge: []
+  });
 
- <b>Motoröl</b>
- <small>Preis pro Liter CHF</small>
- <input id="oil" value="${s.oil}">
-
- <b>Kühlmittel</b>
- <small>Preis pro Liter CHF</small>
- <input id="coolant" value="${s.coolant}">
-
- <b>Bremsflüssigkeit</b>
- <small>Preis pro Liter CHF</small>
- <input id="brake" value="${s.brake}">
-
- <b>Getriebeöl</b>
- <small>Preis pro Liter CHF</small>
- <input id="gear" value="${s.gear}">
-
- <b>Servolenkungsöl</b>
- <small>Preis pro Liter CHF</small>
- <input id="servo" value="${s.servo}">
-
- <b>Scheibenwischwasser</b>
- <small>Preis pro Liter CHF</small>
- <input id="washer" value="${s.washer}">
-
- <button onclick="saveSettings()">Speichern</button>
- <button onclick="menu()">Zurück</button>`;
-}
-function saveSettings(){
- set("settings",{
-  rate:+rate.value,
-  oil:+oil.value,coolant:+coolant.value,
-  brake:+brake.value,gear:+gear.value,
-  servo:+servo.value,washer:+washer.value
- });
- menu();
+  speichern();
+  start();
 }
 
-/* CUSTOMERS */
-function customers(){
- let c=get("customers",[]);
- let h="<h3>Kunden</h3>";
- c.forEach((x,i)=>h+=`
- <div class="card">
-  <b>${x.name}</b>
-  <button onclick="openCustomer(${i})">Öffnen</button>
- </div>`);
- app.innerHTML=h+`
- <button onclick="newCustomer()">Neuer Kunde</button>
- <button onclick="menu()">Zurück</button>`;
+function kundeOeffnen(i) {
+  aktKunde = daten.kunden[i];
+  const app = document.getElementById("app");
+
+  app.innerHTML = `
+    <h2>${aktKunde.name}</h2>
+    <button onclick="fahrzeugNeu()">➕ Fahrzeug</button>
+    <button class="danger" onclick="kundeLoeschen(${i})">🗑 Kunde löschen</button>
+    <hr>
+    ${aktKunde.fahrzeuge.map((f,j)=>`
+      <button onclick="fahrzeugOeffnen(${j})">
+        ${f.marke} ${f.modell} (${f.kennzeichen})
+      </button>
+    `).join("")}
+    <br><br>
+    <button onclick="start()">⬅ Zurück</button>
+  `;
 }
 
-function newCustomer(){
- app.innerHTML=`
- <h3>Neuer Kunde</h3>
- <input id="name" placeholder="Name">
- <button onclick="saveCustomer()">Speichern</button>`;
-}
-function saveCustomer(){
- let c=get("customers",[]);
- c.push({name:name.value,vehicles:[]});
- set("customers",c);customers();
+function kundeLoeschen(i) {
+  if (!confirm("Kunde inkl. aller Daten löschen?")) return;
+  daten.kunden.splice(i,1);
+  speichern();
+  start();
 }
 
-/* VEHICLES */
-function openCustomer(ci){
- let c=get("customers",[]);
- let cust=c[ci];
- let h=`<h3>${cust.name}</h3>`;
- cust.vehicles.forEach((v,vi)=>h+=`
- <div class="card">
-  ${v.brand} ${v.model}<br><small>${v.plate}</small>
-  <button onclick="works(${ci},${vi})">Rapporte</button>
- </div>`);
- app.innerHTML=h+`
- <button onclick="newVehicle(${ci})">Fahrzeug hinzufügen</button>
- <button class="danger" onclick="deleteCustomer(${ci})">Kunde löschen</button>
- <button onclick="customers()">Zurück</button>`;
+/* ------------------ FAHRZEUGE ------------------ */
+
+function fahrzeugNeu() {
+  const marke = prompt("Marke:");
+  const modell = prompt("Modell:");
+  const kenn = prompt("Kennzeichen:");
+
+  if (!marke || !modell) return;
+
+  aktKunde.fahrzeuge.push({
+    marke, modell, kennzeichen: kenn,
+    rapporte: []
+  });
+
+  speichern();
+  kundeOeffnen(daten.kunden.indexOf(aktKunde));
 }
 
-function deleteCustomer(ci){
- if(confirm("Kunde inkl. aller Fahrzeuge & Rapporte löschen?")){
-  let c=get("customers",[]);
-  c.splice(ci,1);
-  set("customers",c);
-  customers();
- }
+function fahrzeugOeffnen(i) {
+  aktFahrzeug = aktKunde.fahrzeuge[i];
+  const app = document.getElementById("app");
+
+  app.innerHTML = `
+    <h2>${aktFahrzeug.marke} ${aktFahrzeug.modell}</h2>
+    <button onclick="rapportNeu()">➕ Neuer Rapport</button>
+    <hr>
+    ${aktFahrzeug.rapporte.map((r,ri)=>`
+      <button onclick="rapportOeffnen(${ri})">
+        ${r.datum} – ${r.typ} – ${r.total.toFixed(2)} CHF
+      </button>
+    `).join("")}
+    <br><br>
+    <button onclick="kundeOeffnen(${daten.kunden.indexOf(aktKunde)})">⬅ Zurück</button>
+  `;
 }
 
-function newVehicle(ci){
- app.innerHTML=`
- <h3>Fahrzeug</h3>
- <input id="brand" placeholder="Marke">
- <input id="model" placeholder="Modell">
- <input id="plate" placeholder="Kennzeichen">
- <button onclick="saveVehicle(${ci})">Speichern</button>`;
-}
-function saveVehicle(ci){
- let c=get("customers",[]);
- c[ci].vehicles.push({
-  brand:brand.value,model:model.value,plate:plate.value,works:[]
- });
- set("customers",c);
- openCustomer(ci);
-}
+/* ------------------ RAPPORT ------------------ */
 
-/* WORKS LIST */
-function works(ci,vi){
- let v=get("customers",[])[ci].vehicles[vi];
- let h="<h3>Rapporte</h3>";
- v.works.forEach((w,wi)=>h+=`
- <div class="card ${w.closed?'locked':''}">
-  ${w.date} – ${w.type}<br>
-  <small>${w.closed?'Abgeschlossen':'Entwurf'}</small>
-  <button onclick="openWork(${ci},${vi},${wi})">Öffnen</button>
- </div>`);
- app.innerHTML=h+`
- <button onclick="newWork(${ci},${vi})">Neuer Rapport</button>
- <button onclick="openCustomer(${ci})">Zurück</button>`;
+function rapportNeu() {
+  aktRapport = {
+    datum: new Date().toLocaleDateString(),
+    typ: "service",
+    km: 0,
+    checklist: [],
+    stunden: 0,
+    fluessigkeiten: {
+      oel: 0,
+      brems: 0,
+      kuehl: 0
+    },
+    total: 0,
+    notiz: ""
+  };
+
+  aktFahrzeug.rapporte.push(aktRapport);
+  rapportBearbeiten();
 }
 
-/* NEW WORK */
-function newWork(ci,vi){
- let s=get("settings",{});
- let w={
-  date:new Date().toLocaleDateString(),
-  km:"",type:"Service",
-  fluids:{},note:"",
-  time:0,parts:0,
-  rate:s.rate,prices:{...s},
-  closed:false
- };
- let c=get("customers",[]);
- c[ci].vehicles[vi].works.push(w);
- set("customers",c);
- openWork(ci,vi,c[ci].vehicles[vi].works.length-1);
+function rapportOeffnen(i) {
+  aktRapport = aktFahrzeug.rapporte[i];
+  rapportBearbeiten();
 }
 
-/* OPEN WORK */
-function openWork(ci,vi,wi){
- let c=get("customers",[]);
- let w=c[ci].vehicles[vi].works[wi];
- let dis=w.closed?"disabled":"";
- app.innerHTML=`
- <h3>${w.type} – ${w.date}</h3>
+function rapportBearbeiten() {
+  const app = document.getElementById("app");
 
- <small>Kilometerstand</small>
- <input ${dis} id="km" value="${w.km}">
+  app.innerHTML = `
+    <h2>Rapport</h2>
 
- <small>Arbeitsart</small>
- <select ${dis} id="type">
-  <option ${w.type=="Service"?"selected":""}>Service</option>
-  <option ${w.type=="Reifenwechsel"?"selected":""}>Reifenwechsel</option>
-  <option ${w.type=="MFK"?"selected":""}>MFK</option>
-  <option ${w.type=="Reparatur"?"selected":""}>Reparatur</option>
- </select>
+    <label>Kilometerstand</label>
+    <input type="number" id="km" value="${aktRapport.km}" oninput="aktRapport.km=this.value">
 
- <h4>Flüssigkeiten (Liter)</h4>
- ${fluid("Motoröl","oil",w)}
- ${fluid("Kühlmittel","coolant",w)}
- ${fluid("Bremsflüssigkeit","brake",w)}
- ${fluid("Getriebeöl","gear",w)}
- ${fluid("Servolenkungsöl","servo",w)}
- ${fluid("Scheibenwischwasser","washer",w)}
+    <label>Arbeitsart</label>
+    <select id="typ" onchange="typGeaendert()">
+      <option value="service">Service</option>
+      <option value="mfk">MFK</option>
+      <option value="reifenwechsel">Reifenwechsel</option>
+    </select>
 
- <h4>Bemerkungen</h4>
- <textarea ${dis} id="note">${w.note}</textarea>
+    <div class="section">
+      <h3>Checkliste</h3>
+      <div id="checkliste"></div>
+    </div>
 
- <h4>Arbeitszeit</h4>
- <small>Stunden</small>
- <input ${dis} id="time" value="${w.time}">
- <small>Teilekosten CHF</small>
- <input ${dis} id="parts" value="${w.parts}">
+    <div class="section">
+      <h3>Arbeitszeit (Std)</h3>
+      <input type="number" step="0.1" id="stunden" value="${aktRapport.stunden}" oninput="berechnen()">
+    </div>
 
- <hr>
- <b>Total CHF: ${calc(w)}</b>
+    <div class="section">
+      <h3>Flüssigkeiten (Liter)</h3>
+      Öl <input type="number" step="0.1" id="oel" oninput="berechnen()">
+      Bremsflüssigkeit <input type="number" step="0.1" id="brems" oninput="berechnen()">
+      Kühlmittel <input type="number" step="0.1" id="kuehl" oninput="berechnen()">
+    </div>
 
- ${!w.closed?`
- <button onclick="closeWork(${ci},${vi},${wi})">Rapport abschliessen</button>
- <button class="danger" onclick="deleteWork(${ci},${vi},${wi})">Rapport löschen</button>
- `:""}
+    <div class="section">
+      <h3>Total</h3>
+      <strong id="total">0.00 CHF</strong>
+    </div>
 
- <button onclick="saveWork(${ci},${vi},${wi})">Speichern</button>
- <button onclick="works(${ci},${vi})">Zurück</button>`;
+    <button onclick="rapportSpeichern()">💾 Speichern</button>
+    <button onclick="fahrzeugOeffnen(${aktKunde.fahrzeuge.indexOf(aktFahrzeug)})">⬅ Zurück</button>
+  `;
+
+  document.getElementById("typ").value = aktRapport.typ;
+  ladeCheckliste();
+  berechnen();
 }
 
-function fluid(label,key,w){
- return `
- <small>${label} – Liter</small>
- <input ${w.closed?"disabled":""} value="${w.fluids[key]||""}"
- oninput="w.fluids['${key}']=this.value">`;
+function typGeaendert() {
+  aktRapport.typ = document.getElementById("typ").value;
+  aktRapport.checklist = [];
+  ladeCheckliste();
 }
 
-/* CALC */
-function calc(w){
- let f=0;
- for(let k in w.fluids){
-  let l=parseFloat(w.fluids[k])||0;
-  f+=l*(w.prices[k]||0);
- }
- return (w.time*w.rate + f + (+w.parts||0)).toFixed(2);
+function ladeCheckliste() {
+  const c = document.getElementById("checkliste");
+  c.innerHTML = "";
+
+  CHECKLISTEN[aktRapport.typ].forEach(p => {
+    const label = document.createElement("label");
+    label.innerHTML = `<input type="checkbox"> ${p}`;
+    c.appendChild(label);
+  });
 }
 
-/* SAVE / DELETE / CLOSE */
-function saveWork(ci,vi,wi){
- let c=get("customers",[]);
- let w=c[ci].vehicles[vi].works[wi];
- if(!w.closed){
-  w.km=km.value;
-  w.type=type.value;
-  w.note=note.value;
-  w.time=+time.value||0;
-  w.parts=+parts.value||0;
- }
- set("customers",c);
- works(ci,vi);
+function berechnen() {
+  const std = Number(document.getElementById("stunden").value || 0);
+  const oel = Number(document.getElementById("oel").value || 0);
+  const brems = Number(document.getElementById("brems").value || 0);
+  const kuehl = Number(document.getElementById("kuehl").value || 0);
+
+  aktRapport.stunden = std;
+  aktRapport.fluessigkeiten.oel = oel;
+  aktRapport.fluessigkeiten.brems = brems;
+  aktRapport.fluessigkeiten.kuehl = kuehl;
+
+  const total =
+    std * daten.settings.stundensatz +
+    oel * daten.settings.fluessigkeiten.oel +
+    brems * daten.settings.fluessigkeiten.brems +
+    kuehl * daten.settings.fluessigkeiten.kuehl;
+
+  aktRapport.total = total;
+  document.getElementById("total").innerText = total.toFixed(2) + " CHF";
 }
 
-function closeWork(ci,vi,wi){
- if(confirm("Rapport wirklich abschliessen? Danach nicht mehr änderbar.")){
-  let c=get("customers",[]);
-  c[ci].vehicles[vi].works[wi].closed=true;
-  set("customers",c);
-  works(ci,vi);
- }
+function rapportSpeichern() {
+  speichern();
+  alert("Rapport gespeichert");
 }
-
-function deleteWork(ci,vi,wi){
- if(confirm("Rapport löschen?")){
-  let c=get("customers",[]);
-  c[ci].vehicles[vi].works.splice(wi,1);
-  set("customers",c);
-  works(ci,vi);
- }
-}
-
-showPin();
 </script>
+
 </body>
 </html>
