@@ -73,7 +73,6 @@ function customers() {
     let h = `<h3>Kunden</h3>
              <input type="text" id="liveSearch" placeholder="Name, Fahrzeug oder Kennzeichen suchen..." oninput="performSearch()" style="border: 2px solid var(--accent);">
              <div id="customerResults">`;
-    
     c.forEach((x, i) => {
         let searchData = (x.name + " " + x.vehicles.map(v => `${v.brand} ${v.model} ${v.plate}`).join(" ")).toLowerCase();
         h += `<div class="card search-item" data-info="${searchData}">
@@ -81,7 +80,6 @@ function customers() {
                 <button class="btn-sec" onclick="openCustomer(${i})">Öffnen</button>
               </div>`;
     });
-    
     app.innerHTML = h + `</div><button onclick="newCustomer()">+ Neuer Kunde</button><button class="btn-sec" onclick="menu()">Zurück</button>`; 
 }
 
@@ -96,9 +94,15 @@ function performSearch() {
 
 function newCustomer() { app.innerHTML = `<h3>Neuer Kunde</h3><input id="cname" placeholder="Name"><button class="btn-save" onclick="saveCustomer()">Anlegen</button>`; }
 function saveCustomer() { let c = get("customers", []); c.push({name: document.getElementById("cname").value, vehicles: []}); set("customers", c); customers(); }
-function openCustomer(ci) { let cust = get("customers", [])[ci]; let h = `<h3>Fahrzeuge: ${cust.name}</h3>`; cust.vehicles.forEach((v, vi) => h += `<div class="card"><strong>${v.brand} ${v.model}</strong><button onclick="works(${ci},${vi})">Rapporte</button></div>`); app.innerHTML = h + `<button onclick="newVehicle(${ci})">+ Fahrzeug</button><button class="btn-danger" onclick="deleteCustomer(${ci})">Löschen</button><button class="btn-sec" onclick="customers()">Zurück</button>`; }
+function openCustomer(ci) { 
+    let cust = get("customers", [])[ci]; 
+    let h = `<h3>Fahrzeugliste: ${cust.name}</h3>`; 
+    cust.vehicles.forEach((v, vi) => h += `<div class="card"><strong>${v.brand} ${v.model}</strong><button onclick="works(${ci},${vi})">Rapporte</button><button class="btn-danger" style="padding:5px; margin-top:5px; font-size:12px" onclick="deleteVehicle(${ci},${vi})">Fahrzeug löschen</button></div>`); 
+    app.innerHTML = h + `<button onclick="newVehicle(${ci})">+ Fahrzeug</button><button class="btn-danger" onclick="deleteCustomer(${ci})">Kunde löschen</button><button class="btn-sec" onclick="customers()">Zurück</button>`; 
+}
 
 function deleteCustomer(ci) { if(confirm("Kunde wirklich löschen?")) { let c = get("customers", []); c.splice(ci, 1); set("customers", c); customers(); } }
+function deleteVehicle(ci, vi) { if(confirm("Fahrzeug wirklich löschen?")) { let c = get("customers", []); c[ci].vehicles.splice(vi, 1); set("customers", c); openCustomer(ci); } }
 function newVehicle(ci) { app.innerHTML = `<h3>Neues Fahrzeug</h3><input id="vbrand" placeholder="Marke"><input id="vmodel" placeholder="Modell"><input id="vplate" placeholder="KENNZEICHEN" oninput="this.value = this.value.toUpperCase()"><button class="btn-save" onclick="saveVehicle(${ci})">Speichern</button><button class="btn-sec" onclick="openCustomer(${ci})">Abbrechen</button>`; }
 function saveVehicle(ci) { let c = get("customers", []); c[ci].vehicles.push({ brand: document.getElementById("vbrand").value, model: document.getElementById("vmodel").value, plate: document.getElementById("vplate").value, works: [] }); set("customers", c); openCustomer(ci); }
 
@@ -114,18 +118,22 @@ function openWork(ci, vi, wi) {
     </div>
     <small>KM-Stand *</small><input ${dis} id="wkm" type="number" placeholder="Zwingend" value="${w.km}" oninput="updateW(${ci},${vi},${wi})">
     <div id="dynamicFields"></div><div id="fluidSection"></div>
-    <h4>Sonstige Teile</h4><div id="partsContainer"></div><button ${dis} class="btn-sec" style="width:50px" onclick="addPartRow(${ci},${vi},${wi})">+</button>
+    <div id="repairSection" style="display:${w.types?.includes('Reparatur')?'block':'none'}">
+        <h4>Sonstige Teile</h4><div id="partsContainer"></div><button ${dis} class="btn-sec" style="width:50px" onclick="addPartRow(${ci},${vi},${wi})">+</button>
+    </div>
     <h4>Zusätzliche Arbeitszeit</h4><input ${dis} id="wtime" type="number" step="0.1" placeholder="Std" value="${w.time||''}" oninput="updateW(${ci},${vi},${wi})">
     <textarea ${dis} id="wnote" placeholder="Bemerkungen" oninput="updateW(${ci},${vi},${wi})">${w.note}</textarea>
     <hr><div style="font-size:24px; font-weight:bold; color:var(--success)" id="liveTotal">Total: CHF ${calcTotal(w)}</div>
     ${!w.closed ? `<button onclick="saveW(${ci},${vi},${wi}, false)">💾 Zwischenspeichern</button><button class="btn-save" onclick="saveW(${ci},${vi},${wi}, true)">✅ Rapport abschliessen</button>` : ''}
+    <button class="btn-danger" onclick="deleteWork(${ci},${vi},${wi})">Rapport löschen</button>
     <button class="btn-sec" onclick="works(${ci},${vi})">Zurück</button>`;
     renderParts(ci, vi, wi); renderDynamic(ci, vi, wi);
 }
 
+function deleteWork(ci, vi, wi) { if(confirm("Rapport wirklich löschen?")) { let c = get("customers", []); c[ci].vehicles[vi].works.splice(wi, 1); set("customers", c); works(ci, vi); } }
+
 function renderDynamic(ci, vi, wi) {
     let c = get("customers", []); let w = c[ci].vehicles[vi].works[wi]; let dis = w.closed ? "disabled" : ""; let dHtml = "";
-    
     if(w.types?.includes("Service")) {
         dHtml += `<h4>Service Details</h4>
         <small>Jahres Inspektion (Std)</small><input ${dis} type="number" step="0.1" id="s_insp" placeholder="Std" value="${w.serviceFields.inspection||''}" oninput="updateW(${ci},${vi},${wi})">
@@ -133,14 +141,11 @@ function renderDynamic(ci, vi, wi) {
         <small>Pollenfilter (Material)</small><input ${dis} type="number" id="s_poll" placeholder="CHF" value="${w.serviceFields.pollenFilter||''}" oninput="updateW(${ci},${vi},${wi})">
         <small>Luftfilter (Material)</small><input ${dis} type="number" id="s_air" placeholder="CHF" value="${w.serviceFields.airFilter||''}" oninput="updateW(${ci},${vi},${wi})">
         <small>Kraftstofffilter (Material)</small><input ${dis} type="number" id="s_fuel" placeholder="CHF" value="${w.serviceFields.fuelFilter||''}" oninput="updateW(${ci},${vi},${wi})">
-        <hr>
-        <small>Zündkerzen (Material)</small><input ${dis} type="number" id="s_plug" placeholder="CHF" value="${w.serviceFields.plugs||''}" oninput="updateW(${ci},${vi},${wi})">
+        <hr><small>Zündkerzen (Material)</small><input ${dis} type="number" id="s_plug" placeholder="CHF" value="${w.serviceFields.plugs||''}" oninput="updateW(${ci},${vi},${wi})">
         <small>Zündkerzen ersetzen (Std)</small><input ${dis} type="number" step="0.1" id="s_plugT" placeholder="Std" value="${w.serviceFields.plugsT||''}" oninput="updateW(${ci},${vi},${wi})">
-        <hr>
-        <small>Zahnriemensatz (Material)</small><input ${dis} type="number" id="s_belt" placeholder="CHF" value="${w.serviceFields.belt||''}" oninput="updateW(${ci},${vi},${wi})">
+        <hr><small>Zahnriemensatz (Material)</small><input ${dis} type="number" id="s_belt" placeholder="CHF" value="${w.serviceFields.belt||''}" oninput="updateW(${ci},${vi},${wi})">
         <small>Zahnriemen ersetzen (Std)</small><input ${dis} type="number" step="0.1" id="s_beltT" placeholder="Std" value="${w.serviceFields.beltT||''}" oninput="updateW(${ci},${vi},${wi})">
-        <hr>
-        <small>Wasserpumpe (Material)</small><input ${dis} type="number" id="s_pump" placeholder="CHF" value="${w.serviceFields.pump||''}" oninput="updateW(${ci},${vi},${wi})">
+        <hr><small>Wasserpumpe (Material)</small><input ${dis} type="number" id="s_pump" placeholder="CHF" value="${w.serviceFields.pump||''}" oninput="updateW(${ci},${vi},${wi})">
         <small>Keilrippenriemen (Material)</small><input ${dis} type="number" id="s_ribM" placeholder="CHF" value="${w.serviceFields.ribbedM||''}" oninput="updateW(${ci},${vi},${wi})">
         <label class="check-item"><input ${dis} type="checkbox" id="s_rib" ${w.serviceFields.ribbed?'checked':''} onchange="updateW(${ci},${vi},${wi})"> <span>Keilrippenriemen i.O.</span></label>`;
     }
@@ -172,7 +177,14 @@ function setTireQty(k, q, ci, vi, wi) { let c = get("customers", []); c[ci].vehi
 function renderParts(ci, vi, wi) { let w = get("customers", [])[ci].vehicles[vi].works[wi]; let dis = w.closed ? "disabled" : ""; document.getElementById("partsContainer").innerHTML = w.partsList.map((p, i) => `<div class="row-flex"><input ${dis} placeholder="Teil" value="${p.t}" oninput="updatePart(${ci},${vi},${wi},${i},'t',this.value)"><input ${dis} type="number" placeholder="CHF" value="${p.p||''}" oninput="updatePart(${ci},${vi},${wi},${i},'p',this.value)"></div>`).join(''); }
 function addPartRow(ci, vi, wi) { let c = get("customers", []); c[ci].vehicles[vi].works[wi].partsList.push({t:"",p:0}); set("customers", c); renderParts(ci, vi, wi); }
 function updatePart(ci, vi, wi, i, k, v) { let c = get("customers", []); c[ci].vehicles[vi].works[wi].partsList[i][k] = k==='p'?+v:v; set("customers", c); updateW(ci, vi, wi); }
-function toggleType(t,ci,vi,wi) { let c = get("customers", []); let w = c[ci].vehicles[vi].works[wi]; w.types=w.types||[]; if(w.types.includes(t)) w.types=w.types.filter(x=>x!==t); else w.types.push(t); set("customers", c); renderDynamic(ci,vi,wi); updateW(ci,vi,wi); }
+
+function toggleType(t,ci,vi,wi) { 
+    let c = get("customers", []); let w = c[ci].vehicles[vi].works[wi]; 
+    w.types=w.types||[]; if(w.types.includes(t)) w.types=w.types.filter(x=>x!==t); else w.types.push(t); 
+    set("customers", c); 
+    document.getElementById("repairSection").style.display = w.types.includes('Reparatur') ? 'block' : 'none';
+    renderDynamic(ci,vi,wi); updateW(ci,vi,wi); 
+}
 function toggleMfk(p,ci,vi,wi) { let c = get("customers", []); let w = c[ci].vehicles[vi].works[wi]; w.mfkPoints[p]=!w.mfkPoints[p]; set("customers", c); renderDynamic(ci,vi,wi); updateW(ci,vi,wi); }
 
 function updateW(ci,vi,wi) {
