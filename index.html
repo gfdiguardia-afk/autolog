@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AutoLog Pro v3.4</title>
+    <title>AutoLog Pro v3.5</title>
     <style>
         :root {
             --bg: #121212; --card: #1e1e1e; --accent: #007aff;
@@ -15,6 +15,7 @@
         button { width: 100%; margin: 8px 0; padding: 14px; border: none; border-radius: 10px; background: var(--accent); color: white; font-size: 16px; font-weight: 600; cursor: pointer; }
         .btn-sec { background: #333; } .btn-danger { background: var(--danger); } .btn-save { background: var(--success); }
         .btn-small { padding: 10px; font-size: 13px; margin: 5px 2px; width: auto; flex: 1; }
+        .btn-minus { background: var(--danger); width: 45px; flex: none; }
         input, select, textarea { width: 100%; margin: 8px 0; padding: 12px; box-sizing: border-box; background: #2c2c2e; color: #fff; border: 1px solid #3a3a3c; border-radius: 8px; font-size: 16px; }
         .card { background: var(--card); padding: 16px; margin: 12px 0; border-radius: 12px; border-left: 4px solid var(--accent); }
         .locked { border-left-color: var(--success); opacity: 0.8; }
@@ -129,7 +130,7 @@ function openWork(ci, vi, wi) {
     <small>KM-Stand *</small><input ${dis} id="wkm" type="number" placeholder="Zwingend erforderlich" value="${w.km}" oninput="updateW(${ci},${vi},${wi})">
     <div id="dynamicFields"></div>
     <hr><div style="font-size:22px; font-weight:bold; color:var(--success)" id="liveTotal">Total: CHF ${calcTotal(w)}</div>
-    ${!w.closed ? `<button class="btn-save" onclick="saveW(${ci},${vi},${wi}, true)">✅ Rapport abschliessen</button>` : ''}
+    ${!w.closed ? `<button class="btn-save" onclick="saveW(${ci},${vi},${wi}, false)">💾 Rapport speichern</button><button class="btn-danger" onclick="saveW(${ci},${vi},${wi}, true)">✅ Rapport abschliessen</button>` : ''}
     <button class="btn-sec" onclick="works(${ci},${vi})">Zurück</button>`;
     renderDynamic(ci, vi, wi);
 }
@@ -138,16 +139,16 @@ function renderDynamic(ci, vi, wi) {
     let c = get("customers", []); let w = c[ci].vehicles[vi].works[wi]; let dis = w.closed ? "disabled" : ""; let dHtml = "";
     
     if(w.types.includes("Bremsen")) {
-        dHtml += `<h4>Bremsen</h4><small>Vorne</small><select ${dis} onchange="updateBrake(${ci},${vi},${wi},'v','t',this.value)"><option value="none">Keine Arbeit</option><option value="pads" ${w.brakeData.v.t=='pads'?'selected':''}>Bremsklötze</option><option value="disks" ${w.brakeData.v.t=='disks'?'selected':''}>Klötze & Scheiben</option></select>
+        dHtml += `<h4>Bremsen</h4><small>Vorne</small><select ${dis} onchange="updateBrake(${ci},${vi},${wi},'v','t',this.value)"><option value="none">Keine Arbeit</option><option value="pads" ${w.brakeData.v.t=='pads'?'selected':''}>Bremsklötze</option><option value="disks" ${w.brakeData.v.t=='disks'?'selected':''}>Bremsklötze & Scheiben</option></select>
         <div class="row-flex"><input ${dis} type="number" placeholder="CHF" value="${w.brakeData.v.p || ''}" oninput="updateBrake(${ci},${vi},${wi},'v','p',this.value)"><input ${dis} type="number" step="0.1" placeholder="Std" value="${w.brakeData.v.h || ''}" oninput="updateBrake(${ci},${vi},${wi},'v','h',this.value)"></div>
-        <small>Hinten</small><select ${dis} onchange="updateBrake(${ci},${vi},${wi},'h','t',this.value)"><option value="none">Keine Arbeit</option><option value="pads" ${w.brakeData.h.t=='pads'?'selected':''}>Bremsklötze</option><option value="disks" ${w.brakeData.h.t=='disks'?'selected':''}>Klötze & Scheiben</option></select>
+        <small>Hinten</small><select ${dis} onchange="updateBrake(${ci},${vi},${wi},'h','t',this.value)"><option value="none">Keine Arbeit</option><option value="pads" ${w.brakeData.h.t=='pads'?'selected':''}>Bremsklötze</option><option value="disks" ${w.brakeData.h.t=='disks'?'selected':''}>Bremsklötze & Scheiben</option><option value="drum_replaced" ${w.brakeData.h.t=='drum_replaced'?'selected':''}>Bremstrommeln ersetzt</option><option value="drum_cleaned" ${w.brakeData.h.t=='drum_cleaned'?'selected':''}>Bremstrommeln gereinigt</option></select>
         <div class="row-flex"><input ${dis} type="number" placeholder="CHF" value="${w.brakeData.h.p || ''}" oninput="updateBrake(${ci},${vi},${wi},'h','p',this.value)"><input ${dis} type="number" step="0.1" placeholder="Std" value="${w.brakeData.h.h || ''}" oninput="updateBrake(${ci},${vi},${wi},'h','h',this.value)"></div>`;
     }
     if(w.types.includes("Beleuchtung")) {
-        dHtml += `<h4>Beleuchtung</h4><div id="bulbList">` + w.bulbs.map((b, i) => `<div class="row-flex"><input ${dis} placeholder="Typ (z.B. H7)" value="${b.t}" oninput="updateBulb(${ci},${vi},${wi},${i},'t',this.value)"><input ${dis} type="number" placeholder="CHF" value="${b.p || ''}" oninput="updateBulb(${ci},${vi},${wi},${i},'p',this.value)"><input ${dis} type="number" step="0.1" placeholder="Std" value="${b.h || ''}" oninput="updateBulb(${ci},${vi},${wi},${i},'h',this.value)"></div>`).join('') + `</div><button ${dis} class="btn-sec btn-small" onclick="addBulb(${ci},${vi},${wi})">+ Birne</button>`;
+        dHtml += `<h4>Beleuchtung</h4><div id="bulbList">` + w.bulbs.map((b, i) => `<div class="row-flex"><input ${dis} placeholder="z.B. H7" value="${b.t}" oninput="updateBulb(${ci},${vi},${wi},${i},'t',this.value)"><input ${dis} type="number" placeholder="CHF" value="${b.p || ''}" oninput="updateBulb(${ci},${vi},${wi},${i},'p',this.value)"><input ${dis} type="number" step="0.1" placeholder="Std" value="${b.h || ''}" oninput="updateBulb(${ci},${vi},${wi},${i},'h',this.value)">${!dis?`<button class="btn-small btn-minus" onclick="removeRow(${ci},${vi},${wi},'bulbs',${i})">-</button>`:''}</div>`).join('') + `</div><button ${dis} class="btn-sec btn-small" onclick="addBulb(${ci},${vi},${wi})">+ Birne hinzufügen</button>`;
     }
     if(w.types.includes("Reparatur")) {
-        dHtml += `<h4>Sonstiges (Reparatur)</h4><div id="partsContainer">` + w.partsList.map((p, i) => `<div class="row-flex"><input ${dis} placeholder="Teil/Arbeit" value="${p.t}" oninput="updatePart(${ci},${vi},${wi},${i},'t',this.value)"><input ${dis} type="number" placeholder="CHF" value="${p.p || ''}" oninput="updatePart(${ci},${vi},${wi},${i},'p',this.value)"></div>`).join('') + `</div><button ${dis} class="btn-sec btn-small" onclick="addPart(${ci},${vi},${wi})">+ Teil/Arbeit</button>`;
+        dHtml += `<h4>Sonstiges (Reparatur)</h4><div id="partsContainer">` + w.partsList.map((p, i) => `<div class="row-flex"><input ${dis} placeholder="Teil/Arbeit" value="${p.t}" oninput="updatePart(${ci},${vi},${wi},${i},'t',this.value)"><input ${dis} type="number" placeholder="CHF" value="${p.p || ''}" oninput="updatePart(${ci},${vi},${wi},${i},'p',this.value)">${!dis?`<button class="btn-small btn-minus" onclick="removeRow(${ci},${vi},${wi},'partsList',${i})">-</button>`:''}</div>`).join('') + `</div><button ${dis} class="btn-sec btn-small" onclick="addPart(${ci},${vi},${wi})">+ Teil/Arbeit hinzufügen</button>`;
     }
     if(w.types.includes("Service") || w.types.includes("Flüssigkeiten")) {
         dHtml += `<h4>Flüssigkeiten</h4>` + Object.keys(LABELS).map(k => `<small>${LABELS[k]}</small><input ${dis} placeholder="Liter" type="number" step="0.1" value="${w.fluids[k] || ''}" oninput="updateFluid(${ci},${vi},${wi},'${k}',this.value)">`).join('');
@@ -155,7 +156,7 @@ function renderDynamic(ci, vi, wi) {
     document.getElementById("dynamicFields").innerHTML = dHtml;
 }
 
-// UPDATE FUNKTIONEN
+function removeRow(ci, vi, wi, list, i) { let c = get("customers", []); c[ci].vehicles[vi].works[wi][list].splice(i, 1); set("customers", c); renderDynamic(ci,vi,wi); updateW(ci,vi,wi); }
 function updateBrake(ci, vi, wi, side, key, val) { let c = get("customers", []); c[ci].vehicles[vi].works[wi].brakeData[side][key] = (key==='t') ? val : +val; set("customers", c); updateW(ci,vi,wi); }
 function updateBulb(ci, vi, wi, i, key, val) { let c = get("customers", []); c[ci].vehicles[vi].works[wi].bulbs[i][key] = (key==='t') ? val : +val; set("customers", c); updateW(ci,vi,wi); }
 function addBulb(ci, vi, wi) { let c = get("customers", []); c[ci].vehicles[vi].works[wi].bulbs.push({t:"",p:null,h:null}); set("customers", c); renderDynamic(ci,vi,wi); }
@@ -183,7 +184,9 @@ function calcTotal(w) {
 
 function saveW(ci, vi, wi, close) {
     if(!document.getElementById("wkm").value) { alert("KM-Stand fehlt!"); return; }
-    if(confirm("Rapport abschliessen? Keine Änderungen mehr möglich.")) { let c = get("customers", []); c[ci].vehicles[vi].works[wi].closed = true; set("customers", c); works(ci, vi); }
+    let c = get("customers", []); 
+    if(close) { if(confirm("Abschliessen? Keine Änderungen mehr möglich.")) { c[ci].vehicles[vi].works[wi].closed = true; set("customers", c); works(ci, vi); } }
+    else { set("customers", c); alert("Gespeichert!"); works(ci, vi); }
 }
 
 function exportData() { let a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([localStorage.getItem("customers")], {type: "application/json"})); a.download = "autolog_backup.json"; a.click(); }
