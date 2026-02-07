@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AutoLog Pro v3.5</title>
+    <title>AutoLog Pro v3.6</title>
     <style>
         :root {
             --bg: #121212; --card: #1e1e1e; --accent: #007aff;
@@ -15,7 +15,7 @@
         button { width: 100%; margin: 8px 0; padding: 14px; border: none; border-radius: 10px; background: var(--accent); color: white; font-size: 16px; font-weight: 600; cursor: pointer; }
         .btn-sec { background: #333; } .btn-danger { background: var(--danger); } .btn-save { background: var(--success); }
         .btn-small { padding: 10px; font-size: 13px; margin: 5px 2px; width: auto; flex: 1; }
-        .btn-minus { background: var(--danger); width: 45px; flex: none; }
+        .btn-minus { background: var(--danger); width: 40px; flex: none; padding: 10px 0; }
         input, select, textarea { width: 100%; margin: 8px 0; padding: 12px; box-sizing: border-box; background: #2c2c2e; color: #fff; border: 1px solid #3a3a3c; border-radius: 8px; font-size: 16px; }
         .card { background: var(--card); padding: 16px; margin: 12px 0; border-radius: 12px; border-left: 4px solid var(--accent); }
         .locked { border-left-color: var(--success); opacity: 0.8; }
@@ -25,7 +25,7 @@
         .check-item input[type="checkbox"] { width: 22px; height: 22px; cursor: pointer; }
         .search-box { position: sticky; top: 70px; background: var(--bg); z-index: 90; padding: 10px 0; border-bottom: 1px solid #333; }
         h3 { margin-top: 20px; color: var(--accent); }
-        h4 { margin: 15px 0 5px 0; border-bottom: 1px solid #333; padding-bottom: 5px; }
+        h4 { margin: 15px 0 5px 0; border-bottom: 1px solid #333; padding-bottom: 5px; color: #eee; }
         small { color: var(--text-dim); font-size: 12px; display: block; }
     </style>
 </head>
@@ -38,6 +38,8 @@
 const PIN = "1234";
 const app = document.getElementById("app");
 const LABELS = { oil: "Motoröl", washer: "Wischwasser", coolant: "Kühlmittel", brake: "Bremsflüssigkeit", gear: "Getriebeöl", servo: "Servolenkungsöl" };
+const SERVICE_CHECKS = ["Ölfilter ersetzt", "Luftfilter ersetzt", "Pollenfilter ersetzt", "Kraftstofffilter ersetzt", "Zündkerzen ersetzt", "Serviceanzeige zurückgestellt"];
+const MFK_CHECKS = ["Motor/Getriebe gewaschen", "Chassis gereinigt", "Licht eingestellt", "Abgastest durchgeführt", "Bremsenprüfstand-Check"];
 
 const get = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch(e) { return d; } };
 const set = (k, v) => localStorage.setItem(k, JSON.stringify(v));
@@ -54,6 +56,7 @@ function settings() {
 }
 function saveSettings() { let s = get("settings", {}); s.rate = +document.getElementById("rate").value; set("settings", s); menu(); }
 
+// --- KUNDEN & SUCHE ---
 function customers() {
     app.innerHTML = `<div class="search-box"><input id="searchInput" type="text" placeholder="🔍 Suche (Name, Marke, Modell)..." oninput="renderCustomerList()"></div>
     <div id="customerList"></div><button onclick="newCustomer()">+ Neuer Kunde</button><button class="btn-sec" onclick="menu()">Zurück</button>`;
@@ -99,6 +102,7 @@ function saveVehicle(ci) {
 }
 function deleteVehicle(ci, vi) { if(confirm("Fahrzeug löschen?")) { let c = get("customers", []); c[ci].vehicles.splice(vi,1); set("customers", c); openCustomer(ci); } }
 
+// --- RAPPORTE ---
 function works(ci, vi) {
     const v = get("customers", [])[ci].vehicles[vi];
     let h = `<h3>Rapporte: ${v.brand}</h3>`;
@@ -114,9 +118,9 @@ function deleteWork(ci, vi, wi) { if(confirm("Rapport löschen?")) { let c = get
 function newWork(ci, vi) {
     let s = get("settings", {rate: 50}); let c = get("customers", []);
     c[ci].vehicles[vi].works.push({ 
-        date: new Date().toLocaleDateString('de-CH'), km: "", types: [], fluids: {}, serviceFields: {}, 
+        date: new Date().toLocaleDateString('de-CH'), km: "", types: [], fluids: {}, serviceFields: {}, mfkFields: {},
         brakeData: {v:{t:"none",p:null,h:null}, h:{t:"none",p:null,h:null}}, 
-        bulbs: [], partsList: [], closed: false, rate: s.rate, prices: {oil:15, coolant:10, brake:20, gear:25, servo:18, washer:2} 
+        bulbs: [], partsList: [], laborList: [], closed: false, rate: s.rate, prices: {oil:15, coolant:10, brake:20, gear:25, servo:18, washer:2} 
     });
     set("customers", c); openWork(ci, vi, c[ci].vehicles[vi].works.length - 1);
 }
@@ -127,10 +131,10 @@ function openWork(ci, vi, wi) {
     <div class="check-group">
         ${["Service","MFK","Flüssigkeiten","Bremsen","Beleuchtung","Reparatur"].map(t => `<label class="check-item"><input ${dis} type="checkbox" onchange="toggleType('${t}',${ci},${vi},${wi})" ${w.types.includes(t)?'checked':''}> ${t}</label>`).join('')}
     </div>
-    <small>KM-Stand *</small><input ${dis} id="wkm" type="number" placeholder="Zwingend erforderlich" value="${w.km}" oninput="updateW(${ci},${vi},${wi})">
+    <small>KM-Stand *</small><input ${dis} id="wkm" type="number" placeholder="KM eingeben" value="${w.km}" oninput="updateW(${ci},${vi},${wi})">
     <div id="dynamicFields"></div>
     <hr><div style="font-size:22px; font-weight:bold; color:var(--success)" id="liveTotal">Total: CHF ${calcTotal(w)}</div>
-    ${!w.closed ? `<button class="btn-save" onclick="saveW(${ci},${vi},${wi}, false)">💾 Rapport speichern</button><button class="btn-danger" onclick="saveW(${ci},${vi},${wi}, true)">✅ Rapport abschliessen</button>` : ''}
+    ${!w.closed ? `<button class="btn-save" onclick="saveW(${ci},${vi},${wi}, false)">💾 Speichern</button><button class="btn-danger" onclick="saveW(${ci},${vi},${wi}, true)">✅ Abschliessen</button>` : ''}
     <button class="btn-sec" onclick="works(${ci},${vi})">Zurück</button>`;
     renderDynamic(ci, vi, wi);
 }
@@ -138,6 +142,12 @@ function openWork(ci, vi, wi) {
 function renderDynamic(ci, vi, wi) {
     let c = get("customers", []); let w = c[ci].vehicles[vi].works[wi]; let dis = w.closed ? "disabled" : ""; let dHtml = "";
     
+    if(w.types.includes("Service")) {
+        dHtml += `<h4>Service</h4><div class="check-group">` + SERVICE_CHECKS.map(check => `<label class="check-item"><input ${dis} type="checkbox" onchange="toggleSub('${ci}','${vi}','${wi}','serviceFields','${check}')" ${w.serviceFields[check]?'checked':''}> ${check}</label>`).join('') + `</div>`;
+    }
+    if(w.types.includes("MFK")) {
+        dHtml += `<h4>MFK</h4><div class="check-group">` + MFK_CHECKS.map(check => `<label class="check-item"><input ${dis} type="checkbox" onchange="toggleSub('${ci}','${vi}','${wi}','mfkFields','${check}')" ${w.mfkFields[check]?'checked':''}> ${check}</label>`).join('') + `</div>`;
+    }
     if(w.types.includes("Bremsen")) {
         dHtml += `<h4>Bremsen</h4><small>Vorne</small><select ${dis} onchange="updateBrake(${ci},${vi},${wi},'v','t',this.value)"><option value="none">Keine Arbeit</option><option value="pads" ${w.brakeData.v.t=='pads'?'selected':''}>Bremsklötze</option><option value="disks" ${w.brakeData.v.t=='disks'?'selected':''}>Bremsklötze & Scheiben</option></select>
         <div class="row-flex"><input ${dis} type="number" placeholder="CHF" value="${w.brakeData.v.p || ''}" oninput="updateBrake(${ci},${vi},${wi},'v','p',this.value)"><input ${dis} type="number" step="0.1" placeholder="Std" value="${w.brakeData.v.h || ''}" oninput="updateBrake(${ci},${vi},${wi},'v','h',this.value)"></div>
@@ -145,25 +155,27 @@ function renderDynamic(ci, vi, wi) {
         <div class="row-flex"><input ${dis} type="number" placeholder="CHF" value="${w.brakeData.h.p || ''}" oninput="updateBrake(${ci},${vi},${wi},'h','p',this.value)"><input ${dis} type="number" step="0.1" placeholder="Std" value="${w.brakeData.h.h || ''}" oninput="updateBrake(${ci},${vi},${wi},'h','h',this.value)"></div>`;
     }
     if(w.types.includes("Beleuchtung")) {
-        dHtml += `<h4>Beleuchtung</h4><div id="bulbList">` + w.bulbs.map((b, i) => `<div class="row-flex"><input ${dis} placeholder="z.B. H7" value="${b.t}" oninput="updateBulb(${ci},${vi},${wi},${i},'t',this.value)"><input ${dis} type="number" placeholder="CHF" value="${b.p || ''}" oninput="updateBulb(${ci},${vi},${wi},${i},'p',this.value)"><input ${dis} type="number" step="0.1" placeholder="Std" value="${b.h || ''}" oninput="updateBulb(${ci},${vi},${wi},${i},'h',this.value)">${!dis?`<button class="btn-small btn-minus" onclick="removeRow(${ci},${vi},${wi},'bulbs',${i})">-</button>`:''}</div>`).join('') + `</div><button ${dis} class="btn-sec btn-small" onclick="addBulb(${ci},${vi},${wi})">+ Birne hinzufügen</button>`;
+        dHtml += `<h4>Beleuchtung</h4><div id="bulbList">` + w.bulbs.map((b, i) => `<div class="row-flex"><input ${dis} placeholder="z.B. H7" value="${b.t}" oninput="updateBulb(${ci},${vi},${wi},${i},'t',this.value)"><input ${dis} type="number" placeholder="CHF" value="${b.p || ''}" oninput="updateBulb(${ci},${vi},${wi},${i},'p',this.value)"><input ${dis} type="number" step="0.1" placeholder="Std" value="${b.h || ''}" oninput="updateBulb(${ci},${vi},${wi},${i},'h',this.value)">${!dis?`<button class="btn-small btn-minus" onclick="removeRow(${ci},${vi},${wi},'bulbs',${i})">-</button>`:''}</div>`).join('') + `</div><button ${dis} class="btn-sec btn-small" onclick="addRow(${ci},${vi},${wi},'bulbs',{t:'',p:null,h:null})">+ Birne hinzufügen</button>`;
     }
     if(w.types.includes("Reparatur")) {
-        dHtml += `<h4>Sonstiges (Reparatur)</h4><div id="partsContainer">` + w.partsList.map((p, i) => `<div class="row-flex"><input ${dis} placeholder="Teil/Arbeit" value="${p.t}" oninput="updatePart(${ci},${vi},${wi},${i},'t',this.value)"><input ${dis} type="number" placeholder="CHF" value="${p.p || ''}" oninput="updatePart(${ci},${vi},${wi},${i},'p',this.value)">${!dis?`<button class="btn-small btn-minus" onclick="removeRow(${ci},${vi},${wi},'partsList',${i})">-</button>`:''}</div>`).join('') + `</div><button ${dis} class="btn-sec btn-small" onclick="addPart(${ci},${vi},${wi})">+ Teil/Arbeit hinzufügen</button>`;
+        dHtml += `<h4>Reparatur (Teile)</h4><div id="partsList">` + w.partsList.map((p, i) => `<div class="row-flex"><input ${dis} placeholder="Teil Bezeichnung" value="${p.t}" oninput="updateList(${ci},${vi},${wi},'partsList',${i},'t',this.value)"><input ${dis} type="number" placeholder="CHF" value="${p.p || ''}" oninput="updateList(${ci},${vi},${wi},'partsList',${i},'p',this.value)">${!dis?`<button class="btn-small btn-minus" onclick="removeRow(${ci},${vi},${wi},'partsList',${i})">-</button>`:''}</div>`).join('') + `</div><button ${dis} class="btn-sec btn-small" onclick="addRow(${ci},${vi},${wi},'partsList',{t:'',p:null})">+ Teil hinzufügen</button>`;
+        dHtml += `<h4>Reparatur (Arbeit)</h4><div id="laborList">` + w.laborList.map((l, i) => `<div class="row-flex"><input ${dis} placeholder="Arbeit Bezeichnung" value="${l.t}" oninput="updateList(${ci},${vi},${wi},'laborList',${i},'t',this.value)"><input ${dis} type="number" step="0.1" placeholder="Std" value="${l.h || ''}" oninput="updateList(${ci},${vi},${wi},'laborList',${i},'h',this.value)">${!dis?`<button class="btn-small btn-minus" onclick="removeRow(${ci},${vi},${wi},'laborList',${i})">-</button>`:''}</div>`).join('') + `</div><button ${dis} class="btn-sec btn-small" onclick="addRow(${ci},${vi},${wi},'laborList',{t:'',h:null})">+ Arbeit hinzufügen</button>`;
     }
-    if(w.types.includes("Service") || w.types.includes("Flüssigkeiten")) {
+    if(w.types.includes("Flüssigkeiten")) {
         dHtml += `<h4>Flüssigkeiten</h4>` + Object.keys(LABELS).map(k => `<small>${LABELS[k]}</small><input ${dis} placeholder="Liter" type="number" step="0.1" value="${w.fluids[k] || ''}" oninput="updateFluid(${ci},${vi},${wi},'${k}',this.value)">`).join('');
     }
     document.getElementById("dynamicFields").innerHTML = dHtml;
 }
 
+// LOGIK-FUNKTIONEN
+function toggleSub(ci, vi, wi, field, key) { let c = get("customers", []); c[ci].vehicles[vi].works[wi][field][key] = !c[ci].vehicles[vi].works[wi][field][key]; set("customers", c); }
+function toggleType(t,ci,vi,wi) { let c = get("customers", []); let w = c[ci].vehicles[vi].works[wi]; if(w.types.includes(t)) w.types = w.types.filter(x=>x!==t); else w.types.push(t); set("customers", c); renderDynamic(ci,vi,wi); updateW(ci,vi,wi); }
+function addRow(ci, vi, wi, list, obj) { let c = get("customers", []); c[ci].vehicles[vi].works[wi][list].push(obj); set("customers", c); renderDynamic(ci,vi,wi); }
 function removeRow(ci, vi, wi, list, i) { let c = get("customers", []); c[ci].vehicles[vi].works[wi][list].splice(i, 1); set("customers", c); renderDynamic(ci,vi,wi); updateW(ci,vi,wi); }
+function updateList(ci, vi, wi, list, i, key, val) { let c = get("customers", []); c[ci].vehicles[vi].works[wi][list][i][key] = (key==='t') ? val : +val; set("customers", c); updateW(ci,vi,wi); }
 function updateBrake(ci, vi, wi, side, key, val) { let c = get("customers", []); c[ci].vehicles[vi].works[wi].brakeData[side][key] = (key==='t') ? val : +val; set("customers", c); updateW(ci,vi,wi); }
 function updateBulb(ci, vi, wi, i, key, val) { let c = get("customers", []); c[ci].vehicles[vi].works[wi].bulbs[i][key] = (key==='t') ? val : +val; set("customers", c); updateW(ci,vi,wi); }
-function addBulb(ci, vi, wi) { let c = get("customers", []); c[ci].vehicles[vi].works[wi].bulbs.push({t:"",p:null,h:null}); set("customers", c); renderDynamic(ci,vi,wi); }
-function updatePart(ci, vi, wi, i, key, val) { let c = get("customers", []); c[ci].vehicles[vi].works[wi].partsList[i][key] = (key==='t') ? val : +val; set("customers", c); updateW(ci,vi,wi); }
-function addPart(ci, vi, wi) { let c = get("customers", []); c[ci].vehicles[vi].works[wi].partsList.push({t:"",p:null}); set("customers", c); renderDynamic(ci,vi,wi); }
 function updateFluid(ci, vi, wi, key, val) { let c = get("customers", []); c[ci].vehicles[vi].works[wi].fluids[key] = +val; set("customers", c); updateW(ci,vi,wi); }
-function toggleType(t,ci,vi,wi) { let c = get("customers", []); let w = c[ci].vehicles[vi].works[wi]; if(w.types.includes(t)) w.types = w.types.filter(x=>x!==t); else w.types.push(t); set("customers", c); renderDynamic(ci,vi,wi); updateW(ci,vi,wi); }
 
 function updateW(ci,vi,wi) {
     let c = get("customers", []); let w = c[ci].vehicles[vi].works[wi];
@@ -179,11 +191,12 @@ function calcTotal(w) {
     total += ((parseFloat(w.brakeData.v.h)||0) + (parseFloat(w.brakeData.h.h)||0)) * w.rate;
     w.bulbs.forEach(b => total += (parseFloat(b.p)||0) + ((parseFloat(b.h)||0) * w.rate));
     w.partsList.forEach(p => total += (parseFloat(p.p)||0));
+    w.laborList.forEach(l => total += (parseFloat(l.h)||0) * w.rate);
     return total.toFixed(2);
 }
 
 function saveW(ci, vi, wi, close) {
-    if(!document.getElementById("wkm").value) { alert("KM-Stand fehlt!"); return; }
+    if(!document.getElementById("wkm").value) { alert("Bitte KM-Stand eingeben!"); return; }
     let c = get("customers", []); 
     if(close) { if(confirm("Abschliessen? Keine Änderungen mehr möglich.")) { c[ci].vehicles[vi].works[wi].closed = true; set("customers", c); works(ci, vi); } }
     else { set("customers", c); alert("Gespeichert!"); works(ci, vi); }
