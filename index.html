@@ -36,6 +36,12 @@
 const PIN = "1234";
 const app = document.getElementById("app");
 
+// Übersetzungshilfe für Keys
+const LABELS = {
+    oil: "Motoröl", coolant: "Kühlmittel", brake: "Bremsflüssigkeit",
+    gear: "Getriebeöl", servo: "Servolenkungsöl", washer: "Scheibenwischwasser"
+};
+
 const get = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch(e) { return d; } };
 const set = (k, v) => localStorage.setItem(k, JSON.stringify(v));
 
@@ -61,28 +67,29 @@ function menu() {
 
 /* SETTINGS */
 function settings() {
-    let s = get("settings", { pinActive: true, rate: 50, oil: 15, coolant: 10, brake: 20, gear: 25, servo: 18, washer: 2 });
+    let s = get("settings", { pinActive: true, rate: 50, oil: 15, coolant: 10, brake: 20, gear: 25, servo: 18, washer: 2, cleanPrice: 20 });
     app.innerHTML = `<h3>Grundeinstellungen</h3>
     <small>Passwort-Schutz (PIN) beim Start</small>
     <select id="pinActive"><option value="true" ${s.pinActive?'selected':''}>Aktiviert</option><option value="false" ${!s.pinActive?'selected':''}>Deaktiviert</option></select>
     <hr>
     <small>Stundenansatz (CHF)</small><input id="rate" type="number" value="${s.rate}">
+    <small>Preis Motor- & Karosseriereinigung (CHF)</small><input id="cleanPrice" type="number" value="${s.cleanPrice||20}">
     <h4>Preise pro Liter (CHF)</h4>
-    ${['oil','coolant','brake','gear','servo','washer'].map(k => `<small>${k}</small><input id="${k}" type="number" value="${s[k]}">`).join('')}
+    ${Object.keys(LABELS).map(k => `<small>${LABELS[k]}</small><input id="${k}" type="number" value="${s[k]}">`).join('')}
     <button class="btn-save" onclick="saveSettings()">Speichern</button><button class="btn-sec" onclick="menu()">Zurück</button>`;
 }
 function saveSettings() {
-    set("settings", {
+    let newS = {
         pinActive: document.getElementById("pinActive").value === "true",
         rate: +document.getElementById("rate").value,
-        oil: +document.getElementById("oil").value, coolant: +document.getElementById("coolant").value,
-        brake: +document.getElementById("brake").value, gear: +document.getElementById("gear").value,
-        servo: +document.getElementById("servo").value, washer: +document.getElementById("washer").value
-    });
+        cleanPrice: +document.getElementById("cleanPrice").value
+    };
+    Object.keys(LABELS).forEach(k => newS[k] = +document.getElementById(k).value);
+    set("settings", newS);
     menu();
 }
 
-/* KUNDEN */
+/* KUNDEN & FAHRZEUGE */
 function customers() {
     let c = get("customers", []);
     let h = "<h3>Kunden</h3>";
@@ -96,7 +103,6 @@ function saveCustomer() {
     let c = get("customers", []); c.push({name: document.getElementById("cname").value, vehicles: []});
     set("customers", c); customers();
 }
-
 function openCustomer(ci) {
     let cust = get("customers", [])[ci];
     let h = `<h3>Fahrzeuge: ${cust.name}</h3>`;
@@ -116,11 +122,11 @@ function saveVehicle(ci) {
 function works(ci, vi) {
     let v = get("customers", [])[ci].vehicles[vi];
     let h = `<h3>Rapporte: ${v.brand}</h3>`;
-    v.works.forEach((w, wi) => h += `<div class="card ${w.closed?'locked':''}"><strong>${w.date} – ${w.types?.join(', ') || w.type}</strong><button onclick="openWork(${ci},${vi},${wi})">Details</button></div>`);
+    v.works.forEach((w, wi) => h += `<div class="card ${w.closed?'locked':''}"><strong>${w.date} – ${w.types?.join(', ') || 'Unbekannt'}</strong><button onclick="openWork(${ci},${vi},${wi})">Details</button></div>`);
     app.innerHTML = h + `<button onclick="newWork(${ci},${vi})">+ Neuer Rapport</button><button class="btn-sec" onclick="openCustomer(${ci})">Zurück</button>`;
 }
 function newWork(ci, vi) {
-    let s = get("settings", {rate:50}); let c = get("customers", []);
+    let s = get("settings", {rate:50, cleanPrice:20}); let c = get("customers", []);
     c[ci].vehicles[vi].works.push({ 
         date: new Date().toLocaleDateString('de-CH'), km: "", 
         types: [], mfkPoints: {}, serviceFields: {inspection:0, oilFilter:0, pollenFilter:0},
@@ -136,7 +142,7 @@ function openWork(ci, vi, wi) {
     app.innerHTML = `<h3>Rapport – ${w.date}</h3>
     <small>Arbeitsart (Mehrfachauswahl)</small>
     <div class="check-group">
-        ${["Service","MFK","Reifenwechsel","Reparatur"].map(t => `
+        ${["Service","MFK","Flüssigkeiten","Reifenwechsel","Reparatur"].map(t => `
             <label class="check-item"><input ${dis} type="checkbox" onchange="toggleType('${t}', ${ci}, ${vi}, ${wi})" ${w.types?.includes(t)?'checked':''}> ${t}</label>
         `).join('')}
     </div>
@@ -145,12 +151,11 @@ function openWork(ci, vi, wi) {
 
     <div id="dynamicFields"></div>
 
-    <h4>Flüssigkeiten (Liter)</h4>
-    ${['oil','coolant','brake','gear','servo','washer'].map(k => `<small>${k}</small><input ${dis} id="f_${k}" type="number" step="0.1" value="${w.fluids[k]||0}" oninput="updateW(${ci},${vi},${wi})">`).join('')}
+    <div id="fluidSection"></div>
     
-    <h4>Manuelle Kosten</h4>
-    <small>Zusätzliche Arbeitszeit (Std)</small><input ${dis} id="wtime" type="number" step="0.1" value="${w.time}" oninput="updateW(${ci},${vi},${wi})">
-    <small>Zusätzliche Teile (CHF)</small><input ${dis} id="wparts" type="number" value="${w.parts}" oninput="updateW(${ci},${vi},${wi})">
+    <h4>Zusätzliche Kosten</h4>
+    <small>Manuelle Arbeitszeit (Std)</small><input ${dis} id="wtime" type="number" step="0.1" value="${w.time}" oninput="updateW(${ci},${vi},${wi})">
+    <small>Sonstige Teile (CHF)</small><input ${dis} id="wparts" type="number" value="${w.parts}" oninput="updateW(${ci},${vi},${wi})">
     
     <textarea ${dis} id="wnote" placeholder="Bemerkungen" oninput="updateW(${ci},${vi},${wi})">${w.note}</textarea>
     <hr><div style="font-size:24px; font-weight:bold" id="liveTotal">Total: CHF ${calcTotal(w)}</div>
@@ -170,32 +175,39 @@ function toggleType(type, ci, vi, wi) {
     if(w.types.includes(type)) w.types = w.types.filter(t => t !== type);
     else w.types.push(type);
     set("customers", c);
-    renderDynamic(ci, vi, vi); // UI Refresh
+    renderDynamic(ci, vi, wi);
     updateW(ci, vi, wi);
 }
 
 function renderDynamic(ci, vi, wi) {
     let c = get("customers", []); let w = c[ci].vehicles[vi].works[wi];
     let dis = w.closed ? "disabled" : "";
-    let html = "";
-
+    
+    // Dynamic Fields (Service / MFK)
+    let dHtml = "";
     if(w.types?.includes("Service")) {
-        html += `<h4>Service Details</h4>
-        <small>Jahres Inspektion (Arbeitszeit Std)</small><input ${dis} type="number" step="0.1" id="s_insp" value="${w.serviceFields?.inspection||0}" oninput="updateW(${ci},${vi},${wi})">
-        <small>Ölfilter (Preis CHF)</small><input ${dis} type="number" id="s_oilf" value="${w.serviceFields?.oilFilter||0}" oninput="updateW(${ci},${vi},${wi})">
-        <small>Pollenfilter (Preis CHF)</small><input ${dis} type="number" id="s_poll" value="${w.serviceFields?.pollenFilter||0}" oninput="updateW(${ci},${vi},${wi})">`;
+        dHtml += `<h4>Service Details</h4>
+        <small>Jahres Inspektion (Std)</small><input ${dis} type="number" step="0.1" id="s_insp" value="${w.serviceFields?.inspection||0}" oninput="updateW(${ci},${vi},${wi})">
+        <small>Ölfilter (CHF)</small><input ${dis} type="number" id="s_oilf" value="${w.serviceFields?.oilFilter||0}" oninput="updateW(${ci},${vi},${wi})">
+        <small>Pollenfilter (CHF)</small><input ${dis} type="number" id="s_poll" value="${w.serviceFields?.pollenFilter||0}" oninput="updateW(${ci},${vi},${wi})">`;
     }
-
     if(w.types?.includes("MFK")) {
-        html += `<h4>MFK Checkliste</h4>
-        <small>MFK richten (Arbeitszeit Std)</small><input ${dis} type="number" step="0.1" id="m_prep" value="${w.mfkPrepTime||0}" oninput="updateW(${ci},${vi},${wi})">
+        dHtml += `<h4>MFK Checkliste</h4>
+        <small>MFK richten (Std)</small><input ${dis} type="number" step="0.1" id="m_prep" value="${w.mfkPrepTime||0}" oninput="updateW(${ci},${vi},${wi})">
         <div class="check-group">
             ${["Licht geprüft","Licht eingestellt","Leuchtweitenregulierung","Bremsen geprüft","Horn geprüft","Lenkradsperre","Scheibenwischer","Auspuff geprüft","Reifen geprüft","Frontscheibe & Beleuchtung","Motor & Karosserie gereinigt"].map(p => `
                 <label class="check-item"><input ${dis} type="checkbox" onchange="toggleMfk('${p}', ${ci}, ${vi}, ${wi})" ${w.mfkPoints?.[p]?'checked':''}> ${p}</label>
             `).join('')}
         </div>`;
     }
-    document.getElementById("dynamicFields").innerHTML = html;
+    document.getElementById("dynamicFields").innerHTML = dHtml;
+
+    // Fluid Section (Nur wenn Service oder Flüssigkeiten)
+    let fHtml = "";
+    if(w.types?.includes("Service") || w.types?.includes("Flüssigkeiten")) {
+        fHtml = `<h4>Flüssigkeiten (Liter)</h4>` + Object.keys(LABELS).map(k => `<small>${LABELS[k]}</small><input ${dis} id="f_${k}" type="number" step="0.1" value="${w.fluids[k]||0}" oninput="updateW(${ci},${vi},${wi})">`).join('');
+    }
+    document.getElementById("fluidSection").innerHTML = fHtml;
 }
 
 function toggleMfk(point, ci, vi, wi) {
@@ -203,6 +215,7 @@ function toggleMfk(point, ci, vi, wi) {
     if(!w.mfkPoints) w.mfkPoints = {};
     w.mfkPoints[point] = !w.mfkPoints[point];
     set("customers", c);
+    updateW(ci, vi, wi);
 }
 
 function updateW(ci, vi, wi) {
@@ -211,7 +224,12 @@ function updateW(ci, vi, wi) {
     w.time = +document.getElementById("wtime").value;
     w.parts = +document.getElementById("wparts").value;
     w.note = document.getElementById("wnote").value;
-    ['oil','coolant','brake','gear','servo','washer'].forEach(k => w.fluids[k] = document.getElementById("f_"+k).value);
+    
+    // Flüssigkeiten nur speichern wenn Felder existieren
+    Object.keys(LABELS).forEach(k => {
+        let el = document.getElementById("f_"+k);
+        if(el) w.fluids[k] = el.value;
+    });
     
     if(w.types?.includes("Service")) {
         w.serviceFields = {
@@ -229,12 +247,15 @@ function updateW(ci, vi, wi) {
 
 function calcTotal(w) {
     let fT = 0; 
-    for(let k in w.prices) { if(k!=='rate' && k!=='pinActive') fT += (parseFloat(w.fluids[k])||0) * (w.prices[k]||0); }
+    Object.keys(LABELS).forEach(k => fT += (parseFloat(w.fluids[k])||0) * (w.prices[k]||0));
     
     let serviceExtra = (w.serviceFields?.inspection || 0) * w.rate + (w.serviceFields?.oilFilter || 0) + (w.serviceFields?.pollenFilter || 0);
     let mfkExtra = (w.mfkPrepTime || 0) * w.rate;
     
-    return ( (w.time * w.rate) + fT + (+w.parts || 0) + serviceExtra + mfkExtra ).toFixed(2);
+    // Reinigungspreis
+    let cleanExtra = (w.mfkPoints?.["Motor & Karosserie gereinigt"]) ? (w.prices.cleanPrice || 20) : 0;
+    
+    return ( (w.time * w.rate) + fT + (+w.parts || 0) + serviceExtra + mfkExtra + cleanExtra ).toFixed(2);
 }
 
 function saveW(ci, vi, wi, close) {
