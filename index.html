@@ -12,7 +12,7 @@ button,input,select,textarea{
  width:100%;margin:6px 0;padding:12px;
  background:#1f1f1f;color:#fff;border:1px solid #444;border-radius:6px
 }
-textarea{min-height:80px}
+textarea{min-height:60px}
 .card{background:#1c1c1c;padding:12px;margin:10px 0;border-radius:8px}
 small{color:#aaa}
 .locked{opacity:.6}
@@ -87,8 +87,10 @@ function customers(){
  let c=get("customers",[]);
  let h="<h3>Kunden</h3>";
  c.forEach((x,i)=>h+=`
- <div class="card"><b>${x.name}</b>
- <button onclick="openCustomer(${i})">Öffnen</button></div>`);
+ <div class="card">
+  <b>${x.name}</b>
+  <button onclick="openCustomer(${i})">Öffnen</button>
+ </div>`);
  app.innerHTML=h+`
  <button onclick="newCustomer()">Neuer Kunde</button>
  <button onclick="menu()">Zurück</button>`;
@@ -101,9 +103,10 @@ function newCustomer(){
  <button onclick="saveCustomer()">Speichern</button>`;
 }
 function saveCustomer(){
- if(!name.value.trim())return;
+ let n=name.value.trim();
+ if(!n){alert("Bitte Name eingeben");return;}
  let c=get("customers",[]);
- c.push({name:name.value.trim(),vehicles:[]});
+ c.push({name:n,vehicles:[]});
  set("customers",c);customers();
 }
 
@@ -114,8 +117,8 @@ function openCustomer(ci){
  let h=`<h3>${cust.name}</h3>`;
  cust.vehicles.forEach((v,vi)=>h+=`
  <div class="card">
- ${v.brand} ${v.model}<br><small>${v.plate}</small>
- <button onclick="works(${ci},${vi})">Rapporte</button>
+  ${v.brand} ${v.model}<br><small>${v.plate}</small>
+  <button onclick="works(${ci},${vi})">Rapporte</button>
  </div>`);
  app.innerHTML=h+`
  <button onclick="newVehicle(${ci})">Fahrzeug hinzufügen</button>
@@ -150,9 +153,9 @@ function works(ci,vi){
  let h="<h3>Rapporte</h3>";
  v.works.forEach((w,wi)=>h+=`
  <div class="card ${w.closed?'locked':''}">
- ${w.date} – ${w.type}<br>
- <small>${w.closed?'Abgeschlossen':'Entwurf'}</small>
- <button onclick="openWork(${ci},${vi},${wi})">Öffnen</button>
+  ${w.date} – ${w.type}<br>
+  <small>${w.closed?'Abgeschlossen':'Entwurf'}</small>
+  <button onclick="openWork(${ci},${vi},${wi})">Öffnen</button>
  </div>`);
  app.innerHTML=h+`
  <button onclick="newWork(${ci},${vi})">Neuer Rapport</button>
@@ -161,7 +164,14 @@ function works(ci,vi){
 
 function newWork(ci,vi){
  let s=get("settings",{});
- let w={date:new Date().toLocaleDateString(),km:"",type:"Service",check:[],fluids:{},note:"",time:0,parts:0,rate:s.rate,prices:{...s},closed:false};
+ let w={
+  date:new Date().toLocaleDateString(),
+  km:"",type:"Service",
+  check:{},fluids:{},note:"",
+  time:0,parts:0,
+  rate:s.rate,prices:{...s},
+  closed:false,closedAt:null
+ };
  let c=get("customers",[]);
  c[ci].vehicles[vi].works.push(w);
  set("customers",c);
@@ -175,14 +185,14 @@ function openWork(ci,vi,wi){
  let dis=w.closed?"disabled":"";
  app.innerHTML=`
  <h3>${w.type} – ${w.date}</h3>
+ ${w.closed?`<small style="color:#f66">Rapport abgeschlossen am ${w.closedAt}</small>`:""}
 
  <small>Kilometerstand</small>
- <input ${dis} id="km" value="${w.km}" oninput="w.km=this.value">
+ <input ${dis} value="${w.km}" oninput="w.km=this.value">
 
  <small>Arbeitsart</small>
- <select ${dis} id="type" onchange="loadChecklist(this.value,w)">
- ${["Service","Reifenwechsel","MFK","Reparatur"].map(t=>`
- <option ${w.type==t?"selected":""}>${t}</option>`).join("")}
+ <select ${dis} onchange="loadChecklist(this.value,w)">
+  ${Object.keys(CHECKLISTS).map(t=>`<option ${w.type==t?"selected":""}>${t}</option>`).join("")}
  </select>
 
  <h4>Checkliste</h4>
@@ -197,13 +207,13 @@ function openWork(ci,vi,wi){
  ${fluid("Scheibenwischwasser","washer",w)}
 
  <h4>Bemerkungen</h4>
- <textarea ${dis} id="note" oninput="w.note=this.value">${w.note}</textarea>
+ <textarea ${dis} oninput="w.note=this.value">${w.note}</textarea>
 
  <h4>Arbeitszeit</h4>
  <small>Stunden</small>
- <input ${dis} id="time" value="${w.time}" oninput="w.time=+this.value||0;updateTotal(w)">
+ <input ${dis} value="${w.time}" oninput="w.time=+this.value||0;updateTotal(w)">
  <small>Teilekosten CHF</small>
- <input ${dis} id="parts" value="${w.parts}" oninput="w.parts=+this.value||0;updateTotal(w)">
+ <input ${dis} value="${w.parts}" oninput="w.parts=+this.value||0;updateTotal(w)">
 
  <hr>
  <b id="total">Total CHF: ${calc(w)}</b>
@@ -220,20 +230,31 @@ function openWork(ci,vi,wi){
 /* CHECKLIST */
 function loadChecklist(type,w){
  w.type=type;
- w.check=w.check||[];
- let d=document.getElementById("check");if(!d)return;
+ if(!w.check) w.check={};
+ let d=document.getElementById("check");
  d.innerHTML="";
  (CHECKLISTS[type]||[]).forEach(t=>{
-  let chk=w.check.includes(t)?"checked":"";
-  d.innerHTML+=`<label><input type="checkbox" ${chk}
-  onchange="this.checked?w.check.push('${t}'):w.check=w.check.filter(x=>x!='${t}')"> ${t}</label>`;
+  if(!w.check[t]) w.check[t]={done:false,note:""};
+  d.innerHTML+=`
+   <div class="card">
+    <label>
+     <input type="checkbox" ${w.check[t].done?"checked":""}
+      ${w.closed?"disabled":""}
+      onchange="w.check['${t}'].done=this.checked">
+     ${t}
+    </label>
+    <textarea ${w.closed?"disabled":""}
+     placeholder="Bemerkung"
+     oninput="w.check['${t}'].note=this.value">${w.check[t].note}</textarea>
+   </div>`;
  });
 }
 
 /* FLUID */
 function fluid(l,k,w){
  return `<small>${l} – Liter</small>
- <input ${w.closed?"disabled":""} value="${w.fluids[k]||""}"
+ <input ${w.closed?"disabled":""}
+ value="${w.fluids[k]||""}"
  oninput="w.fluids['${k}']=this.value;updateTotal(w)">`;
 }
 
@@ -258,9 +279,11 @@ function saveWork(ci,vi,wi){
  openWork(ci,vi,wi);
 }
 function closeWork(ci,vi,wi){
- if(confirm("Rapport abschliessen?")){
+ if(confirm("Rapport wirklich abschliessen? Danach nicht mehr änderbar.")){
   let c=get("customers",[]);
-  c[ci].vehicles[vi].works[wi].closed=true;
+  let w=c[ci].vehicles[vi].works[wi];
+  w.closed=true;
+  w.closedAt=new Date().toLocaleString();
   set("customers",c);works(ci,vi);
  }
 }
