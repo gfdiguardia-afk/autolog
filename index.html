@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AutoLog</title>
+<style>
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  background: #f2f2f2;
+}
+header {
+  background: #222;
+  color: white;
+  padding: 15px;
+  text-align: center;
+}
+.container {
+  padding: 15px;
+}
+button {
+  padding: 12px;
+  margin: 5px 0;
+  width: 100%;
+  font-size: 16px;
+}
+input, select {
+  padding: 10px;
+  width: 100%;
+  margin: 5px 0;
+  font-size: 16px;
+}
+.card {
+  background: white;
+  padding: 10px;
+  margin: 10px 0;
+  border-radius: 8px;
+}
+</style>
+</head>
+<body>
+
+<header>AutoLog</header>
+
+<div class="container" id="app"></div>
+
+<script>
+const PIN = "1234";
+
+function showPinScreen() {
+  document.getElementById("app").innerHTML = `
+    <h3>PIN eingeben</h3>
+    <input type="password" id="pin" placeholder="PIN">
+    <button onclick="checkPin()">Öffnen</button>
+  `;
+}
+
+function checkPin() {
+  const value = document.getElementById("pin").value;
+  if (value === PIN) {
+    showMenu();
+  } else {
+    alert("Falscher PIN");
+  }
+}
+
+function showMenu() {
+  document.getElementById("app").innerHTML = `
+    <button onclick="addCustomer()">Neuer Kunde</button>
+    <button onclick="listCustomers()">Kundenliste</button>
+  `;
+}
+
+function getCustomers() {
+  return JSON.parse(localStorage.getItem("customers") || "[]");
+}
+
+function saveCustomers(data) {
+  localStorage.setItem("customers", JSON.stringify(data));
+}
+
+function addCustomer() {
+  document.getElementById("app").innerHTML = `
+    <h3>Neuer Kunde</h3>
+    <input id="name" placeholder="Name">
+    <button onclick="saveCustomer()">Speichern</button>
+    <button onclick="showMenu()">Zurück</button>
+  `;
+}
+
+function saveCustomer() {
+  const name = document.getElementById("name").value;
+  if (!name) return;
+
+  const customers = getCustomers();
+  customers.push({ name });
+  saveCustomers(customers);
+  showMenu();
+}
+
+function listCustomers() {
+  const customers = getCustomers();
+  let html = `<h3>Kunden</h3>`;
+  customers.forEach(c => {
+    html += `<div class="card">${c.name}</div>`;
+  });
+  html += `<button onclick="showMenu()">Zurück</button>`;
+  document.getElementById("app").innerHTML = html;
+}
+
+showPinScreen();
+</script>
+
+</body>
+</html>
