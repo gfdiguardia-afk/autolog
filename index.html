@@ -1,302 +1,287 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AutoLog</title>
-<style>
-body{margin:0;font-family:Arial;background:#111;color:#eee}
-header{background:#000;padding:15px;text-align:center;font-size:20px}
-.container{padding:15px}
-button,input,select,textarea{
- width:100%;margin:6px 0;padding:12px;
- background:#1f1f1f;color:#fff;border:1px solid #444;border-radius:6px
-}
-textarea{min-height:80px}
-.card{background:#1c1c1c;padding:12px;margin:10px 0;border-radius:8px}
-small{color:#aaa}
-.locked{opacity:.6}
-hr{border:0;border-top:1px solid #333;margin:15px 0}
-.danger{background:#400}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AutoLog Pro</title>
+    <style>
+        :root {
+            --bg: #121212;
+            --card: #1e1e1e;
+            --accent: #007aff;
+            --danger: #ff3b30;
+            --success: #34c759;
+            --text: #ffffff;
+            --text-dim: #b0b0b0;
+        }
+        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica; background: var(--bg); color: var(--text); padding-bottom: 50px; }
+        header { background: #000; padding: 20px; text-align: center; font-weight: bold; font-size: 22px; border-bottom: 1px solid #333; position: sticky; top: 0; z-index: 100; }
+        .container { padding: 15px; max-width: 600px; margin: auto; }
+        
+        /* Form-Elemente */
+        button { 
+            width: 100%; margin: 10px 0; padding: 14px; border: none; border-radius: 10px; 
+            background: var(--accent); color: white; font-size: 16px; font-weight: 600; cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        button:active { opacity: 0.7; }
+        .btn-sec { background: #333; }
+        .btn-danger { background: var(--danger); }
+        .btn-save { background: var(--success); }
+
+        input, select, textarea {
+            width: 100%; margin: 8px 0; padding: 12px; box-sizing: border-box;
+            background: #2c2c2e; color: #fff; border: 1px solid #3a3a3c; border-radius: 8px; font-size: 16px;
+        }
+
+        /* Karten-Design */
+        .card { 
+            background: var(--card); padding: 16px; margin: 12px 0; border-radius: 12px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5); border-left: 4px solid var(--accent);
+        }
+        .locked { border-left-color: var(--success); opacity: 0.9; }
+        
+        h3 { margin-top: 25px; color: var(--accent); }
+        small { display: block; margin-top: 4px; color: var(--text-dim); font-size: 12px; }
+        hr { border: 0; border-top: 1px solid #333; margin: 20px 0; }
+
+        /* Druck-Layout */
+        @media print {
+            body { background: white; color: black; }
+            button, .btn-danger, hr, header { display: none !important; }
+            .card { border: 1px solid #ccc; box-shadow: none; color: black; }
+            .container { max-width: 100%; }
+        }
+    </style>
 </head>
 <body>
 
-<header>AutoLog</header>
+<header>AutoLog Pro</header>
 <div class="container" id="app"></div>
 
 <script>
-const PIN="1234";
-const app=document.getElementById("app");
+const PIN = "1234";
+const app = document.getElementById("app");
 
-const get=(k,d)=>JSON.parse(localStorage.getItem(k))||d;
-const set=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
+// Speicher-Logik
+const get = (k, d) => {
+    try { return JSON.parse(localStorage.getItem(k)) || d; } 
+    catch(e) { return d; }
+};
+const set = (k, v) => localStorage.setItem(k, JSON.stringify(v));
 
-/* LOGIN */
-function showPin(){
- app.innerHTML=`
- <h3>PIN</h3>
- <input id="pin" type="password">
- <button onclick="pin.value===PIN?menu():alert('Falscher PIN')">Öffnen</button>`;
+/* START-LOGIN */
+function showPin() {
+    app.innerHTML = `
+    <div style="text-align:center; padding-top:50px">
+        <h3>Werkstatt-Login</h3>
+        <input id="pinInput" type="password" placeholder="PIN eingeben" style="text-align:center; font-size:24px">
+        <button onclick="checkPin()">System öffnen</button>
+    </div>`;
 }
 
-/* MENU */
-function menu(){
- app.innerHTML=`
- <button onclick="customers()">Kunden</button>
- <button onclick="settings()">Einstellungen</button>`;
+function checkPin() {
+    if(document.getElementById("pinInput").value === PIN) menu();
+    else alert("Falscher PIN");
 }
 
-/* SETTINGS */
-function settings(){
- let s=get("settings",{
-  rate:50,
-  oil:15,coolant:10,brake:20,gear:25,servo:18,washer:2
- });
- app.innerHTML=`
- <h3>Grundeinstellungen</h3>
-
- <b>Stundenansatz</b>
- <small>CHF pro Stunde</small>
- <input id="rate" value="${s.rate}">
-
- <hr>
-
- <b>Motoröl</b>
- <small>Preis pro Liter CHF</small>
- <input id="oil" value="${s.oil}">
-
- <b>Kühlmittel</b>
- <small>Preis pro Liter CHF</small>
- <input id="coolant" value="${s.coolant}">
-
- <b>Bremsflüssigkeit</b>
- <small>Preis pro Liter CHF</small>
- <input id="brake" value="${s.brake}">
-
- <b>Getriebeöl</b>
- <small>Preis pro Liter CHF</small>
- <input id="gear" value="${s.gear}">
-
- <b>Servolenkungsöl</b>
- <small>Preis pro Liter CHF</small>
- <input id="servo" value="${s.servo}">
-
- <b>Scheibenwischwasser</b>
- <small>Preis pro Liter CHF</small>
- <input id="washer" value="${s.washer}">
-
- <button onclick="saveSettings()">Speichern</button>
- <button onclick="menu()">Zurück</button>`;
-}
-function saveSettings(){
- set("settings",{
-  rate:+rate.value,
-  oil:+oil.value,coolant:+coolant.value,
-  brake:+brake.value,gear:+gear.value,
-  servo:+servo.value,washer:+washer.value
- });
- menu();
+/* HAUPTMENÜ */
+function menu() {
+    app.innerHTML = `
+    <button onclick="customers()">👥 Kundenverwaltung</button>
+    <button onclick="settings()">⚙️ Grundeinstellungen</button>
+    <button class="btn-sec" onclick="exportData()">💾 Daten-Backup (Export)</button>
+    <div style="text-align:center; margin-top:20px"><small>Version 2.0 - 2026</small></div>`;
 }
 
-/* CUSTOMERS */
-function customers(){
- let c=get("customers",[]);
- let h="<h3>Kunden</h3>";
- c.forEach((x,i)=>h+=`
- <div class="card">
-  <b>${x.name}</b>
-  <button onclick="openCustomer(${i})">Öffnen</button>
- </div>`);
- app.innerHTML=h+`
- <button onclick="newCustomer()">Neuer Kunde</button>
- <button onclick="menu()">Zurück</button>`;
+/* EINSTELLUNGEN */
+function settings() {
+    let s = get("settings", { rate: 50, oil: 15, coolant: 10, brake: 20, gear: 25, servo: 18, washer: 2 });
+    app.innerHTML = `
+    <h3>Grundeinstellungen</h3>
+    <small>Stundenansatz (CHF)</small>
+    <input id="rate" type="number" value="${s.rate}">
+    <hr>
+    <h4>Flüssigkeiten (Preis pro Liter)</h4>
+    <small>Motoröl</small><input id="oil" type="number" value="${s.oil}">
+    <small>Kühlmittel</small><input id="coolant" type="number" value="${s.coolant}">
+    <small>Bremsflüssigkeit</small><input id="brake" type="number" value="${s.brake}">
+    <button class="btn-save" onclick="saveSettings()">Speichern</button>
+    <button class="btn-sec" onclick="menu()">Zurück</button>`;
 }
 
-function newCustomer(){
- app.innerHTML=`
- <h3>Neuer Kunde</h3>
- <input id="name" placeholder="Name">
- <button onclick="saveCustomer()">Speichern</button>`;
-}
-function saveCustomer(){
- let c=get("customers",[]);
- c.push({name:name.value,vehicles:[]});
- set("customers",c);customers();
-}
-
-/* VEHICLES */
-function openCustomer(ci){
- let c=get("customers",[]);
- let cust=c[ci];
- let h=`<h3>${cust.name}</h3>`;
- cust.vehicles.forEach((v,vi)=>h+=`
- <div class="card">
-  ${v.brand} ${v.model}<br><small>${v.plate}</small>
-  <button onclick="works(${ci},${vi})">Rapporte</button>
- </div>`);
- app.innerHTML=h+`
- <button onclick="newVehicle(${ci})">Fahrzeug hinzufügen</button>
- <button class="danger" onclick="deleteCustomer(${ci})">Kunde löschen</button>
- <button onclick="customers()">Zurück</button>`;
+function saveSettings() {
+    set("settings", {
+        rate: +document.getElementById("rate").value,
+        oil: +document.getElementById("oil").value,
+        coolant: +document.getElementById("coolant").value,
+        brake: +document.getElementById("brake").value,
+        gear: 25, servo: 18, washer: 2 // Vereinfacht
+    });
+    menu();
 }
 
-function deleteCustomer(ci){
- if(confirm("Kunde inkl. aller Fahrzeuge & Rapporte löschen?")){
-  let c=get("customers",[]);
-  c.splice(ci,1);
-  set("customers",c);
-  customers();
- }
+/* KUNDEN & FAHRZEUGE */
+function customers() {
+    let c = get("customers", []);
+    let h = "<h3>Meine Kunden</h3>";
+    c.forEach((x, i) => h += `
+    <div class="card">
+        <strong>${x.name}</strong>
+        <button class="btn-sec" onclick="openCustomer(${i})">Fahrzeuge anzeigen</button>
+    </div>`);
+    app.innerHTML = h + `
+    <button onclick="newCustomer()">+ Neuer Kunde</button>
+    <button class="btn-sec" onclick="menu()">Hauptmenü</button>`;
 }
 
-function newVehicle(ci){
- app.innerHTML=`
- <h3>Fahrzeug</h3>
- <input id="brand" placeholder="Marke">
- <input id="model" placeholder="Modell">
- <input id="plate" placeholder="Kennzeichen">
- <button onclick="saveVehicle(${ci})">Speichern</button>`;
-}
-function saveVehicle(ci){
- let c=get("customers",[]);
- c[ci].vehicles.push({
-  brand:brand.value,model:model.value,plate:plate.value,works:[]
- });
- set("customers",c);
- openCustomer(ci);
+function newCustomer() {
+    app.innerHTML = `<h3>Neuer Kunde</h3>
+    <input id="cname" placeholder="Vollständiger Name">
+    <button class="btn-save" onclick="saveCustomer()">Anlegen</button>
+    <button class="btn-sec" onclick="customers()">Abbrechen</button>`;
 }
 
-/* WORKS LIST */
-function works(ci,vi){
- let v=get("customers",[])[ci].vehicles[vi];
- let h="<h3>Rapporte</h3>";
- v.works.forEach((w,wi)=>h+=`
- <div class="card ${w.closed?'locked':''}">
-  ${w.date} – ${w.type}<br>
-  <small>${w.closed?'Abgeschlossen':'Entwurf'}</small>
-  <button onclick="openWork(${ci},${vi},${wi})">Öffnen</button>
- </div>`);
- app.innerHTML=h+`
- <button onclick="newWork(${ci},${vi})">Neuer Rapport</button>
- <button onclick="openCustomer(${ci})">Zurück</button>`;
+function saveCustomer() {
+    let name = document.getElementById("cname").value;
+    if(!name) return alert("Name fehlt");
+    let c = get("customers", []);
+    c.push({name: name, vehicles: []});
+    set("customers", c); customers();
 }
 
-/* NEW WORK */
-function newWork(ci,vi){
- let s=get("settings",{});
- let w={
-  date:new Date().toLocaleDateString(),
-  km:"",type:"Service",
-  fluids:{},note:"",
-  time:0,parts:0,
-  rate:s.rate,prices:{...s},
-  closed:false
- };
- let c=get("customers",[]);
- c[ci].vehicles[vi].works.push(w);
- set("customers",c);
- openWork(ci,vi,c[ci].vehicles[vi].works.length-1);
+function openCustomer(ci) {
+    let cust = get("customers", [])[ci];
+    let h = `<h3>Fahrzeuge: ${cust.name}</h3>`;
+    cust.vehicles.forEach((v, vi) => h += `
+    <div class="card">
+        <strong>${v.brand} ${v.model}</strong>
+        <small>Kennzeichen: ${v.plate}</small>
+        <button onclick="works(${ci},${vi})">Rapporte / Service</button>
+    </div>`);
+    app.innerHTML = h + `
+    <button onclick="newVehicle(${ci})">+ Fahrzeug hinzufügen</button>
+    <button class="btn-danger" onclick="deleteCustomer(${ci})">Kunde löschen</button>
+    <button class="btn-sec" onclick="customers()">Zurück</button>`;
 }
 
-/* OPEN WORK */
-function openWork(ci,vi,wi){
- let c=get("customers",[]);
- let w=c[ci].vehicles[vi].works[wi];
- let dis=w.closed?"disabled":"";
- app.innerHTML=`
- <h3>${w.type} – ${w.date}</h3>
-
- <small>Kilometerstand</small>
- <input ${dis} id="km" value="${w.km}">
-
- <small>Arbeitsart</small>
- <select ${dis} id="type">
-  <option ${w.type=="Service"?"selected":""}>Service</option>
-  <option ${w.type=="Reifenwechsel"?"selected":""}>Reifenwechsel</option>
-  <option ${w.type=="MFK"?"selected":""}>MFK</option>
-  <option ${w.type=="Reparatur"?"selected":""}>Reparatur</option>
- </select>
-
- <h4>Flüssigkeiten (Liter)</h4>
- ${fluid("Motoröl","oil",w)}
- ${fluid("Kühlmittel","coolant",w)}
- ${fluid("Bremsflüssigkeit","brake",w)}
- ${fluid("Getriebeöl","gear",w)}
- ${fluid("Servolenkungsöl","servo",w)}
- ${fluid("Scheibenwischwasser","washer",w)}
-
- <h4>Bemerkungen</h4>
- <textarea ${dis} id="note">${w.note}</textarea>
-
- <h4>Arbeitszeit</h4>
- <small>Stunden</small>
- <input ${dis} id="time" value="${w.time}">
- <small>Teilekosten CHF</small>
- <input ${dis} id="parts" value="${w.parts}">
-
- <hr>
- <b>Total CHF: ${calc(w)}</b>
-
- ${!w.closed?`
- <button onclick="closeWork(${ci},${vi},${wi})">Rapport abschliessen</button>
- <button class="danger" onclick="deleteWork(${ci},${vi},${wi})">Rapport löschen</button>
- `:""}
-
- <button onclick="saveWork(${ci},${vi},${wi})">Speichern</button>
- <button onclick="works(${ci},${vi})">Zurück</button>`;
+function newVehicle(ci) {
+    app.innerHTML = `<h3>Neues Fahrzeug</h3>
+    <input id="vbrand" placeholder="Marke (z.B. VW)">
+    <input id="vmodel" placeholder="Modell (z.B. Golf)">
+    <input id="vplate" placeholder="Kennzeichen">
+    <button class="btn-save" onclick="saveVehicle(${ci})">Speichern</button>`;
 }
 
-function fluid(label,key,w){
- return `
- <small>${label} – Liter</small>
- <input ${w.closed?"disabled":""} value="${w.fluids[key]||""}"
- oninput="w.fluids['${key}']=this.value">`;
+function saveVehicle(ci) {
+    let c = get("customers", []);
+    c[ci].vehicles.push({
+        brand: document.getElementById("vbrand").value,
+        model: document.getElementById("vmodel").value,
+        plate: document.getElementById("vplate").value,
+        works: []
+    });
+    set("customers", c); openCustomer(ci);
 }
 
-/* CALC */
-function calc(w){
- let f=0;
- for(let k in w.fluids){
-  let l=parseFloat(w.fluids[k])||0;
-  f+=l*(w.prices[k]||0);
- }
- return (w.time*w.rate + f + (+w.parts||0)).toFixed(2);
+/* RAPPORTE */
+function works(ci, vi) {
+    let v = get("customers", [])[ci].vehicles[vi];
+    let h = `<h3>Rapporte: ${v.brand}</h3>`;
+    v.works.forEach((w, wi) => h += `
+    <div class="card ${w.closed?'locked':''}">
+        <strong>${w.date} – ${w.type}</strong>
+        <small>${w.closed ? '✅ Abgeschlossen' : '✍️ Entwurf'}</small>
+        <button onclick="openWork(${ci},${vi},${wi})">Details öffnen</button>
+    </div>`);
+    app.innerHTML = h + `
+    <button onclick="newWork(${ci},${vi})">+ Neuer Rapport</button>
+    <button class="btn-sec" onclick="openCustomer(${ci})">Zurück</button>`;
 }
 
-/* SAVE / DELETE / CLOSE */
-function saveWork(ci,vi,wi){
- let c=get("customers",[]);
- let w=c[ci].vehicles[vi].works[wi];
- if(!w.closed){
-  w.km=km.value;
-  w.type=type.value;
-  w.note=note.value;
-  w.time=+time.value||0;
-  w.parts=+parts.value||0;
- }
- set("customers",c);
- works(ci,vi);
+function newWork(ci, vi) {
+    let s = get("settings", {rate:50});
+    let c = get("customers", []);
+    c[ci].vehicles[vi].works.push({
+        date: new Date().toLocaleDateString('de-CH'),
+        km: "", type: "Service", fluids: {}, note: "",
+        time: 0, parts: 0, rate: s.rate, prices: {...s}, closed: false
+    });
+    set("customers", c);
+    openWork(ci, vi, c[ci].vehicles[vi].works.length - 1);
 }
 
-function closeWork(ci,vi,wi){
- if(confirm("Rapport wirklich abschliessen? Danach nicht mehr änderbar.")){
-  let c=get("customers",[]);
-  c[ci].vehicles[vi].works[wi].closed=true;
-  set("customers",c);
-  works(ci,vi);
- }
+function openWork(ci, vi, wi) {
+    let c = get("customers", []);
+    let w = c[ci].vehicles[vi].works[wi];
+    let dis = w.closed ? "disabled" : "";
+    
+    app.innerHTML = `
+    <div id="printArea">
+        <h3>Rapport: ${w.type}</h3>
+        <p>${w.date} | KM: ${w.km || '---'}</p>
+        
+        <small>Kilometerstand</small>
+        <input ${dis} id="wkm" value="${w.km}">
+        
+        <small>Arbeitszeit (Stunden)</small>
+        <input ${dis} id="wtime" type="number" value="${w.time}">
+        
+        <small>Zusätzliche Teile (CHF)</small>
+        <input ${dis} id="wparts" type="number" value="${w.parts}">
+
+        <h4>Flüssigkeiten</h4>
+        ${renderFluid("Motoröl", "oil", w)}
+        ${renderFluid("Kühlmittel", "coolant", w)}
+
+        <hr>
+        <div style="font-size:20px; font-weight:bold">Total: CHF ${calcTotal(w)}</div>
+    </div>
+    
+    ${!w.closed ? `<button class="btn-save" onclick="saveWork(${ci},${vi},${wi})">Speichern & Schliessen</button>` : ''}
+    <button class="btn-sec" onclick="window.print()">🖨️ PDF / Drucken</button>
+    <button class="btn-sec" onclick="works(${ci},${vi})">Zurück</button>`;
 }
 
-function deleteWork(ci,vi,wi){
- if(confirm("Rapport löschen?")){
-  let c=get("customers",[]);
-  c[ci].vehicles[vi].works.splice(wi,1);
-  set("customers",c);
-  works(ci,vi);
- }
+function renderFluid(label, key, w) {
+    return `<small>${label} (Liter)</small>
+    <input ${w.closed?"disabled":""} type="number" step="0.1" 
+    id="f_${key}" value="${w.fluids[key]||0}">`;
 }
 
+function calcTotal(w) {
+    let fTotal = 0;
+    for(let k in w.fluids) fTotal += (parseFloat(w.fluids[k])||0) * (w.prices[k]||0);
+    return ( (w.time * w.rate) + fTotal + (+w.parts || 0) ).toFixed(2);
+}
+
+function saveWork(ci, vi, wi) {
+    let c = get("customers", []);
+    let w = c[ci].vehicles[vi].works[wi];
+    w.km = document.getElementById("wkm").value;
+    w.time = +document.getElementById("wtime").value;
+    w.parts = +document.getElementById("wparts").value;
+    // Flüssigkeiten speichern
+    ["oil", "coolant"].forEach(k => {
+        w.fluids[k] = document.getElementById("f_"+k).value;
+    });
+    
+    if(confirm("Rapport jetzt abschliessen?")) w.closed = true;
+    
+    set("customers", c);
+    works(ci, vi);
+}
+
+function exportData() {
+    let data = localStorage.getItem("customers");
+    let blob = new Blob([data], {type: "application/json"});
+    let a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "autolog_backup.json";
+    a.click();
+}
+
+// Start
 showPin();
 </script>
 </body>
