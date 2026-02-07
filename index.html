@@ -5,51 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AutoLog</title>
 <style>
-body {
-  font-family: Arial, sans-serif;
-  margin: 0;
-  background: #111;
-  color: #eee;
+body { margin:0; font-family:Arial; background:#111; color:#eee; }
+header { background:#000; padding:15px; text-align:center; font-size:20px; }
+.container { padding:15px; }
+button,input,select {
+  width:100%; margin:6px 0; padding:12px;
+  background:#1f1f1f; color:white; border:1px solid #444; border-radius:6px;
 }
-header {
-  background: #000;
-  color: white;
-  padding: 15px;
-  text-align: center;
-  font-size: 20px;
-}
-.container {
-  padding: 15px;
-}
-button {
-  padding: 14px;
-  margin: 6px 0;
-  width: 100%;
-  font-size: 16px;
-  background: #1f1f1f;
-  color: white;
-  border: none;
-  border-radius: 6px;
-}
-input, select {
-  padding: 10px;
-  width: 100%;
-  margin: 5px 0;
-  font-size: 16px;
-  background: #222;
-  color: white;
-  border: 1px solid #444;
-  border-radius: 6px;
-}
-.card {
-  background: #1c1c1c;
-  padding: 12px;
-  margin: 10px 0;
-  border-radius: 8px;
-}
-h3 {
-  margin-top: 20px;
-}
+.card { background:#1c1c1c; padding:12px; margin:10px 0; border-radius:8px; }
+small { color:#aaa; }
 </style>
 </head>
 <body>
@@ -59,138 +23,142 @@ h3 {
 
 <script>
 const PIN = "1234";
+const app = document.getElementById("app");
 
-function showPinScreen() {
+function getData(key, def) {
+  return JSON.parse(localStorage.getItem(key)) || def;
+}
+function setData(key, val) {
+  localStorage.setItem(key, JSON.stringify(val));
+}
+
+function showPin() {
   app.innerHTML = `
     <h3>PIN eingeben</h3>
-    <input type="password" id="pin" placeholder="PIN">
+    <input id="pin" type="password">
     <button onclick="checkPin()">Öffnen</button>
   `;
 }
-
 function checkPin() {
-  if (pin.value === PIN) showMenu();
+  if (pin.value === PIN) menu();
   else alert("Falscher PIN");
 }
 
-function showMenu() {
+function menu() {
   app.innerHTML = `
-    <button onclick="addCustomer()">Neuer Kunde</button>
-    <button onclick="listCustomers()">Kundenliste</button>
+    <button onclick="customers()">Kunden</button>
+    <button onclick="settings()">Einstellungen</button>
   `;
 }
 
-function getCustomers() {
-  return JSON.parse(localStorage.getItem("customers") || "[]");
+/* Einstellungen */
+function settings() {
+  let rate = getData("rate", 50);
+  app.innerHTML = `
+    <h3>Grundeinstellungen</h3>
+    <label>Stundenansatz CHF / h</label>
+    <input id="rate" type="number" value="${rate}">
+    <button onclick="saveSettings()">Speichern</button>
+    <button onclick="menu()">Zurück</button>
+  `;
 }
-function saveCustomers(data) {
-  localStorage.setItem("customers", JSON.stringify(data));
+function saveSettings() {
+  setData("rate", Number(rate.value));
+  menu();
 }
 
-function addCustomer() {
+/* Kunden */
+function customers() {
+  let list = getData("customers", []);
+  let html = `<h3>Kunden</h3>`;
+  list.forEach((c,i)=>{
+    html += `<div class="card"><b>${c.name}</b>
+      <button onclick="openCustomer(${i})">Öffnen</button></div>`;
+  });
+  html += `<button onclick="newCustomer()">Neuer Kunde</button>
+           <button onclick="menu()">Zurück</button>`;
+  app.innerHTML = html;
+}
+function newCustomer() {
   app.innerHTML = `
     <h3>Neuer Kunde</h3>
     <input id="name" placeholder="Name">
     <button onclick="saveCustomer()">Speichern</button>
-    <button onclick="showMenu()">Zurück</button>
   `;
 }
-
 function saveCustomer() {
-  const name = document.getElementById("name").value;
-  if (!name) return;
-  const customers = getCustomers();
-  customers.push({ name, vehicles: [] });
-  saveCustomers(customers);
-  showMenu();
+  let list = getData("customers", []);
+  list.push({ name:name.value, vehicles:[] });
+  setData("customers", list);
+  customers();
 }
 
-function listCustomers() {
-  const customers = getCustomers();
-  let html = `<h3>Kunden</h3>`;
-  customers.forEach((c, i) => {
-    html += `
-      <div class="card">
-        <strong>${c.name}</strong><br>
-        <button onclick="viewCustomer(${i})">Öffnen</button>
-      </div>`;
-  });
-  html += `<button onclick="showMenu()">Zurück</button>`;
-  app.innerHTML = html;
-}
-
-function viewCustomer(index) {
-  const customers = getCustomers();
-  const c = customers[index];
+/* Fahrzeuge */
+function openCustomer(i) {
+  let c = getData("customers", [])[i];
   let html = `<h3>${c.name}</h3>`;
-
-  c.vehicles.forEach((v, vi) => {
-    html += `
-      <div class="card">
-        <strong>${v.brand} ${v.model}</strong><br>
-        KM: ${v.km || "-"}<br>
-        <button onclick="newWork(${index},${vi})">Arbeit erfassen</button>
-      </div>`;
+  c.vehicles.forEach((v,vi)=>{
+    html += `<div class="card">
+      ${v.brand} ${v.model}<br>
+      <small>${v.plate}</small>
+      <button onclick="newWork(${i},${vi})">Neue Arbeit</button>
+    </div>`;
   });
-
-  html += `
-    <button onclick="addVehicle(${index})">Fahrzeug hinzufügen</button>
-    <button onclick="listCustomers()">Zurück</button>
-  `;
+  html += `<button onclick="newVehicle(${i})">Fahrzeug hinzufügen</button>
+           <button onclick="customers()">Zurück</button>`;
   app.innerHTML = html;
 }
-
-function addVehicle(ci) {
+function newVehicle(ci) {
   app.innerHTML = `
-    <h3>Fahrzeug hinzufügen</h3>
+    <h3>Fahrzeug</h3>
     <input id="brand" placeholder="Marke">
     <input id="model" placeholder="Modell">
     <input id="plate" placeholder="Kennzeichen">
     <button onclick="saveVehicle(${ci})">Speichern</button>
   `;
 }
-
 function saveVehicle(ci) {
-  const customers = getCustomers();
-  customers[ci].vehicles.push({
-    brand: brand.value,
-    model: model.value,
-    plate: plate.value,
-    works: []
-  });
-  saveCustomers(customers);
-  viewCustomer(ci);
+  let list = getData("customers", []);
+  list[ci].vehicles.push({brand:brand.value,model:model.value,plate:plate.value,works:[]});
+  setData("customers", list);
+  openCustomer(ci);
 }
 
-function newWork(ci, vi) {
+/* Arbeit */
+function newWork(ci,vi) {
+  let rate = getData("rate",50);
   app.innerHTML = `
-    <h3>Kilometerstand</h3>
-    <input id="km" placeholder="KM">
-    <h3>Arbeit</h3>
+    <h3>Arbeitsrapport</h3>
+    <input id="km" placeholder="Kilometerstand">
     <select id="type">
       <option>Service</option>
       <option>Reifenwechsel</option>
       <option>MFK</option>
       <option>Reparatur</option>
     </select>
-    <button onclick="saveWork(${ci},${vi})">Speichern</button>
+    <input id="time" placeholder="Arbeitszeit (Std)">
+    <input id="parts" placeholder="Teilekosten CHF">
+    <small>Stundenansatz: ${rate} CHF/h</small>
+    <button onclick="saveWork(${ci},${vi},${rate})">Speichern</button>
   `;
 }
-
-function saveWork(ci, vi) {
-  const customers = getCustomers();
-  customers[ci].vehicles[vi].works.push({
-    km: km.value,
-    type: type.value,
-    date: new Date().toLocaleDateString()
+function saveWork(ci,vi,rate) {
+  let list = getData("customers", []);
+  let time = Number(timeInput=time.value);
+  let parts = Number(parts.value||0);
+  let labor = time * rate;
+  list[ci].vehicles[vi].works.push({
+    date:new Date().toLocaleDateString(),
+    km:km.value,
+    type:type.value,
+    time, rate, labor, parts,
+    total:labor+parts
   });
-  saveCustomers(customers);
-  viewCustomer(ci);
+  setData("customers", list);
+  openCustomer(ci);
 }
 
-const app = document.getElementById("app");
-showPinScreen();
+showPin();
 </script>
-
 </body>
 </html>
