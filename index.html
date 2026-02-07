@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AutoLog Pro v3.2</title>
+    <title>AutoLog Pro v3.3</title>
     <style>
         :root {
             --bg: #121212; --card: #1e1e1e; --accent: #007aff;
@@ -17,10 +17,15 @@
         .btn-small { padding: 10px; font-size: 13px; margin: 5px 2px; width: auto; flex: 1; }
         input, select, textarea { width: 100%; margin: 8px 0; padding: 12px; box-sizing: border-box; background: #2c2c2e; color: #fff; border: 1px solid #3a3a3c; border-radius: 8px; font-size: 16px; }
         .card { background: var(--card); padding: 16px; margin: 12px 0; border-radius: 12px; border-left: 4px solid var(--accent); }
-        .row-flex { display: flex; gap: 8px; justify-content: space-between; }
+        .locked { border-left-color: var(--success); opacity: 0.8; }
+        .row-flex { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+        .check-group { background: #2c2c2e; padding: 10px; border-radius: 8px; margin: 10px 0; }
+        .check-item { display: flex; align-items: center; gap: 12px; margin: 10px 0; }
+        .check-item input[type="checkbox"] { width: 22px; height: 22px; }
         .search-box { position: sticky; top: 70px; background: var(--bg); z-index: 90; padding: 10px 0; border-bottom: 1px solid #333; }
         h3 { margin-top: 20px; color: var(--accent); }
-        small { color: var(--text-dim); font-size: 12px; }
+        h4 { margin: 15px 0 5px 0; border-bottom: 1px solid #333; padding-bottom: 5px; }
+        small { color: var(--text-dim); font-size: 12px; display: block; }
     </style>
 </head>
 <body>
@@ -31,172 +36,158 @@
 <script>
 const PIN = "1234";
 const app = document.getElementById("app");
+const LABELS = { oil: "Motoröl", washer: "Wischwasser", coolant: "Kühlmittel", brake: "Bremsflüssigkeit", gear: "Getriebeöl", servo: "Servolenkungsöl" };
 
-// Speicher-Funktionen
-const get = (k, d) => {
-    const data = localStorage.getItem(k);
-    if (!data) return d;
-    try { return JSON.parse(data); } catch(e) { return d; }
-};
+const get = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch(e) { return d; } };
 const set = (k, v) => localStorage.setItem(k, JSON.stringify(v));
 
-// Start der App
-function startApp() { 
-    let s = get("settings", { pinActive: true }); 
-    if (s.pinActive) showPin(); else menu(); 
-}
+function startApp() { let s = get("settings", { pinActive: true }); if (s.pinActive) showPin(); else menu(); }
+function showPin() { app.innerHTML = `<div style="text-align:center; padding-top:50px"><h3>Login</h3><input id="pinInput" type="password" placeholder="PIN" style="text-align:center;"><button onclick="checkPin()">Öffnen</button></div>`; }
+function checkPin() { if(document.getElementById("pinInput").value === PIN) menu(); else alert("Falscher PIN"); }
+function menu() { app.innerHTML = `<button onclick="customers()">👥 Kundenverwaltung</button><button onclick="settings()">⚙️ Einstellungen</button><button class="btn-sec" onclick="exportData()">💾 Backup</button>`; }
 
-function showPin() { 
-    app.innerHTML = `<div style="text-align:center; padding-top:50px"><h3>Werkstatt-Login</h3>
-    <input id="pinInput" type="password" placeholder="PIN" style="text-align:center; font-size:24px">
-    <button onclick="checkPin()">Öffnen</button></div>`; 
+// --- EINSTELLUNGEN ---
+function settings() {
+    let s = get("settings", { rate: 50 });
+    app.innerHTML = `<h3>Einstellungen</h3><small>Stundenansatz (CHF)</small><input id="rate" type="number" value="${s.rate}">
+    <button class="btn-save" onclick="saveSettings()">Speichern</button><button class="btn-sec" onclick="menu()">Zurück</button>`;
 }
+function saveSettings() { let s = get("settings", {}); s.rate = +document.getElementById("rate").value; set("settings", s); menu(); }
 
-function checkPin() { 
-    if(document.getElementById("pinInput").value === PIN) menu(); else alert("Falscher PIN"); 
-}
-
-function menu() { 
-    app.innerHTML = `
-    <button onclick="customers()">👥 Kundenverwaltung</button>
-    <button onclick="settings()">⚙️ Einstellungen</button>
-    <button class="btn-sec" onclick="exportData()">💾 Daten sichern</button>`; 
-}
-
-// --- KUNDENVERWALTUNG MIT FUNKTIONIERENDER SUCHE ---
+// --- KUNDEN & SUCHE ---
 function customers() {
-    app.innerHTML = `
-        <div class="search-box">
-            <input id="searchInput" type="text" placeholder="🔍 Name oder Fahrzeug suchen..." oninput="renderCustomerList()">
-        </div>
-        <div id="customerList"></div>
-        <button onclick="newCustomer()">+ Neuer Kunde</button>
-        <button class="btn-sec" onclick="menu()">Hauptmenü</button>
-    `;
-    renderCustomerList(); // Zeigt sofort alle Kunden an
+    app.innerHTML = `<div class="search-box"><input id="searchInput" type="text" placeholder="🔍 Suche..." oninput="renderCustomerList()"></div>
+    <div id="customerList"></div><button onclick="newCustomer()">+ Neuer Kunde</button><button class="btn-sec" onclick="menu()">Zurück</button>`;
+    renderCustomerList();
 }
 
 function renderCustomerList() {
     const q = document.getElementById("searchInput") ? document.getElementById("searchInput").value.toLowerCase() : "";
     const c = get("customers", []);
-    const listDiv = document.getElementById("customerList");
     let h = "";
-
-    if (c.length === 0) {
-        listDiv.innerHTML = "<p style='text-align:center; padding:20px; color:gray;'>Keine Kunden angelegt.</p>";
-        return;
-    }
-
     c.forEach((cust, ci) => {
-        const vehicleMatch = cust.vehicles ? cust.vehicles.some(v => (v.brand + " " + v.model).toLowerCase().includes(q)) : false;
-        const nameMatch = cust.name.toLowerCase().includes(q);
-
-        if (nameMatch || vehicleMatch || q === "") {
-            h += `
-            <div class="card">
-                <strong>${cust.name}</strong><br>
-                <small>${cust.vehicles ? cust.vehicles.length : 0} Fahrzeuge hinterlegt</small>
-                <div class="row-flex">
-                    <button class="btn-small" onclick="openCustomer(${ci})">Öffnen</button>
-                    <button class="btn-small btn-danger" onclick="deleteCustomer(${ci})">Löschen</button>
-                </div>
-            </div>`;
+        const vMatch = cust.vehicles.some(v => (v.brand + " " + v.model).toLowerCase().includes(q));
+        if (cust.name.toLowerCase().includes(q) || vMatch || q === "") {
+            h += `<div class="card"><strong>${cust.name}</strong><div class="row-flex"><button class="btn-small" onclick="openCustomer(${ci})">Anzeigen</button><button class="btn-small btn-danger" onclick="deleteCustomer(${ci})">Löschen</button></div></div>`;
         }
     });
-    listDiv.innerHTML = h;
+    document.getElementById("customerList").innerHTML = h || "<p style='color:gray'>Keine Treffer.</p>";
 }
 
-function newCustomer() { 
-    app.innerHTML = `
-    <h3>Neuer Kunde</h3>
-    <input id="cname" placeholder="Name des Kunden">
-    <button class="btn-save" onclick="saveCustomer()">Speichern</button>
-    <button class="btn-sec" onclick="customers()">Abbrechen</button>`; 
-}
+function newCustomer() { app.innerHTML = `<h3>Neuer Kunde</h3><input id="cname" placeholder="Name"><button class="btn-save" onclick="saveCustomer()">Speichern</button><button class="btn-sec" onclick="customers()">Abbrechen</button>`; }
+function saveCustomer() { let c = get("customers", []); c.push({name: document.getElementById("cname").value, vehicles: []}); set("customers", c); customers(); }
+function deleteCustomer(ci) { if(confirm("Kunde löschen?")) { let c = get("customers", []); c.splice(ci,1); set("customers", c); renderCustomerList(); } }
 
-function saveCustomer() { 
-    const name = document.getElementById("cname").value;
-    if(!name) { alert("Bitte Namen eingeben"); return; }
-    let c = get("customers", []); 
-    c.push({name: name, vehicles: []}); 
-    set("customers", c); 
-    customers(); 
-}
-
-function deleteCustomer(ci) { 
-    if(confirm("Diesen Kunden wirklich löschen?")) { 
-        let c = get("customers", []); 
-        c.splice(ci,1); 
-        set("customers", c); 
-        renderCustomerList(); 
-    } 
-}
-
-// --- FAHRZEUG-LOGIK ---
+// --- FAHRZEUGE ---
 function openCustomer(ci) {
     const cust = get("customers", [])[ci];
     let h = `<h3>Fahrzeuge von ${cust.name}</h3>`;
-    
-    if (cust.vehicles && cust.vehicles.length > 0) {
-        cust.vehicles.forEach((v, vi) => {
-            h += `
-            <div class="card">
-                <strong>${v.brand} ${v.model}</strong><br>
-                <small>Kennzeichen: ${v.plate || 'keines'}</small>
-                <div class="row-flex">
-                    <button class="btn-small" onclick="works(${ci},${vi})">Rapporte</button>
-                    <button class="btn-small btn-danger" onclick="deleteVehicle(${ci},${vi})">Löschen</button>
-                </div>
-            </div>`;
-        });
-    } else {
-        h += "<p style='color:gray;'>Noch kein Fahrzeug erfasst.</p>";
-    }
-    app.innerHTML = h + `<button onclick="newVehicle(${ci})">+ Fahrzeug hinzufügen</button><button class="btn-sec" onclick="customers()">Zurück</button>`;
+    cust.vehicles.forEach((v, vi) => {
+        h += `<div class="card"><strong>${v.brand} ${v.model}</strong><br><small>${v.plate}</small><div class="row-flex"><button class="btn-small" onclick="works(${ci},${vi})">Rapporte</button><button class="btn-small btn-danger" onclick="deleteVehicle(${ci},${vi})">Löschen</button></div></div>`;
+    });
+    app.innerHTML = h + `<button onclick="newVehicle(${ci})">+ Fahrzeug</button><button class="btn-sec" onclick="customers()">Zurück</button>`;
 }
 
 function newVehicle(ci) {
-    app.innerHTML = `
-    <h3>Fahrzeug hinzufügen</h3>
-    <input id="vbrand" placeholder="Marke (z.B. VW)">
-    <input id="vmodel" placeholder="Modell (z.B. Golf)">
-    <input id="vplate" placeholder="Kennzeichen">
-    <button class="btn-save" onclick="saveVehicle(${ci})">Speichern</button>
-    <button class="btn-sec" onclick="openCustomer(${ci})">Abbrechen</button>`;
+    app.innerHTML = `<h3>Neues Fahrzeug</h3><input id="vbrand" placeholder="Marke"><input id="vmodel" placeholder="Modell">
+    <input id="vplate" placeholder="Kennzeichen" oninput="this.value = this.value.toUpperCase()" style="text-transform: uppercase;">
+    <button class="btn-save" onclick="saveVehicle(${ci})">Speichern</button><button class="btn-sec" onclick="openCustomer(${ci})">Abbrechen</button>`;
 }
 
 function saveVehicle(ci) {
     let c = get("customers", []);
-    const brand = document.getElementById("vbrand").value;
-    if(!brand) return;
-    c[ci].vehicles.push({ 
-        brand: brand, 
-        model: document.getElementById("vmodel").value, 
-        plate: document.getElementById("vplate").value, 
-        works: [] 
-    });
-    set("customers", c);
-    openCustomer(ci);
+    c[ci].vehicles.push({ brand: document.getElementById("vbrand").value, model: document.getElementById("vmodel").value, plate: document.getElementById("vplate").value.toUpperCase(), works: [] });
+    set("customers", c); openCustomer(ci);
 }
+function deleteVehicle(ci, vi) { if(confirm("Fahrzeug löschen?")) { let c = get("customers", []); c[ci].vehicles.splice(vi,1); set("customers", c); openCustomer(ci); } }
 
-function deleteVehicle(ci, vi) {
-    if(confirm("Fahrzeug löschen?")) {
-        let c = get("customers", []);
-        c[ci].vehicles.splice(vi, 1);
-        set("customers", c);
-        openCustomer(ci);
-    }
-}
-
-// --- RAPPORT-LOGIK (Platzhalter für deine restlichen Funktionen) ---
+// --- RAPPORTE (VOLLSTÄNDIGE FUNKTION) ---
 function works(ci, vi) {
     const v = get("customers", [])[ci].vehicles[vi];
-    app.innerHTML = `<h3>Rapporte: ${v.brand}</h3><p>Hier kommen deine bestehenden Rapport-Funktionen hin...</p><button class="btn-sec" onclick="openCustomer(${ci})">Zurück</button>`;
+    let h = `<h3>Rapporte: ${v.brand}</h3>`;
+    v.works.forEach((w, wi) => {
+        h += `<div class="card ${w.closed?'locked':''}"><strong>${w.date}</strong> - ${w.types?.join(', ') || 'Rapport'}
+        <div class="row-flex"><button class="btn-small" onclick="openWork(${ci},${vi},${wi})">Details</button>${!w.closed?`<button class="btn-small btn-danger" onclick="deleteWork(${ci},${vi},${wi})">Löschen</button>`:''}</div></div>`;
+    });
+    app.innerHTML = h + `<button onclick="newWork(${ci},${vi})">+ Neuer Rapport</button><button class="btn-sec" onclick="openCustomer(${ci})">Zurück</button>`;
 }
 
-function settings() { app.innerHTML = `<h3>Einstellungen</h3><button class="btn-sec" onclick="menu()">Zurück</button>`; }
-function exportData() { alert("Daten als JSON gesichert (Simulation)"); }
+function deleteWork(ci, vi, wi) { if(confirm("Rapport löschen?")) { let c = get("customers", []); c[ci].vehicles[vi].works.splice(wi,1); set("customers", c); works(ci, vi); } }
 
+function newWork(ci, vi) {
+    let s = get("settings", {rate: 50}); let c = get("customers", []);
+    c[ci].vehicles[vi].works.push({ 
+        date: new Date().toLocaleDateString('de-CH'), km: "", types: [], fluids: {}, serviceFields: {}, 
+        brakeData: {v:{t:"none",p:0,h:0}, h:{t:"none",p:0,h:0, drum:"none"}}, 
+        bulbs: [{t:"", p:0, h:0}], partsList: [{t:"",p:0}], closed: false, rate: s.rate, prices: {oil:15, coolant:10, brake:20, gear:25, servo:18, washer:2} 
+    });
+    set("customers", c); openWork(ci, vi, c[ci].vehicles[vi].works.length - 1);
+}
+
+function openWork(ci, vi, wi) {
+    let c = get("customers", []); let w = c[ci].vehicles[vi].works[wi]; let dis = w.closed ? "disabled" : "";
+    app.innerHTML = `<h3>Rapport – ${w.date}</h3>
+    <div class="check-group">
+        ${["Service","MFK","Flüssigkeiten","Bremsen","Beleuchtung","Reparatur"].map(t => `<label class="check-item"><input ${dis} type="checkbox" onchange="toggleType('${t}',${ci},${vi},${wi})" ${w.types.includes(t)?'checked':''}> ${t}</label>`).join('')}
+    </div>
+    <small>KM-Stand *</small><input ${dis} id="wkm" type="number" placeholder="Zwingend erforderlich" value="${w.km}" oninput="updateW(${ci},${vi},${wi})">
+    <div id="dynamicFields"></div>
+    <h4>Sonstiges</h4><div id="partsContainer"></div><button ${dis} class="btn-sec btn-small" onclick="addPartRow(${ci},${vi},${wi})">+ Teil</button>
+    <hr><div style="font-size:22px; font-weight:bold; color:var(--success)" id="liveTotal">Total: CHF ${calcTotal(w)}</div>
+    ${!w.closed ? `<button class="btn-save" onclick="saveW(${ci},${vi},${wi}, true)">✅ Rapport abschliessen</button>` : ''}
+    <button class="btn-sec" onclick="works(${ci},${vi})">Zurück</button>`;
+    renderDynamic(ci, vi, wi); renderParts(ci, vi, wi);
+}
+
+function renderDynamic(ci, vi, wi) {
+    let c = get("customers", []); let w = c[ci].vehicles[vi].works[wi]; let dis = w.closed ? "disabled" : ""; let dHtml = "";
+    
+    if(w.types.includes("Bremsen")) {
+        dHtml += `<h4>Bremsen</h4><small>Vorne</small><select ${dis} onchange="w.brakeData.v.t=this.value; updateW(${ci},${vi},${wi})"><option value="none">Keine Arbeit</option><option value="pads" ${w.brakeData.v.t=='pads'?'selected':''}>Bremsklötze</option><option value="disks" ${w.brakeData.v.t=='disks'?'selected':''}>Klötze & Scheiben</option></select>
+        <div class="row-flex"><input ${dis} type="number" placeholder="CHF" value="${w.brakeData.v.p}" oninput="w.brakeData.v.p=+this.value; updateW(${ci},${vi},${wi})"><input ${dis} type="number" step="0.1" placeholder="Std" value="${w.brakeData.v.h}" oninput="w.brakeData.v.h=+this.value; updateW(${ci},${vi},${wi})"></div>
+        <small>Hinten</small><select ${dis} onchange="w.brakeData.h.t=this.value; updateW(${ci},${vi},${wi})"><option value="none">Keine Arbeit</option><option value="pads" ${w.brakeData.h.t=='pads'?'selected':''}>Bremsklötze</option><option value="disks" ${w.brakeData.h.t=='disks'?'selected':''}>Klötze & Scheiben</option></select>
+        <div class="row-flex"><input ${dis} type="number" placeholder="CHF" value="${w.brakeData.h.p}" oninput="w.brakeData.h.p=+this.value; updateW(${ci},${vi},${wi})"><input ${dis} type="number" step="0.1" placeholder="Std" value="${w.brakeData.h.h}" oninput="w.brakeData.h.h=+this.value; updateW(${ci},${vi},${wi})"></div>`;
+    }
+    if(w.types.includes("Beleuchtung")) {
+        dHtml += `<h4>Beleuchtung</h4><div id="bulbList">` + w.bulbs.map((b, bi) => `<div class="row-flex"><input ${dis} placeholder="Typ (z.B. H7)" value="${b.t}" oninput="w.bulbs[${bi}].t=this.value; updateW(${ci},${vi},${wi})"><input ${dis} type="number" placeholder="CHF" value="${b.p}" oninput="w.bulbs[${bi}].p=+this.value; updateW(${ci},${vi},${wi})"><input ${dis} type="number" step="0.1" placeholder="Std" value="${b.h}" oninput="w.bulbs[${bi}].h=+this.value; updateW(${ci},${vi},${wi})"></div>`).join('') + `</div><button ${dis} class="btn-sec btn-small" onclick="w.bulbs.push({t:'',p:0,h:0}); renderDynamic(${ci},${vi},${wi})">+ Birne</button>`;
+    }
+    if(w.types.includes("Service") || w.types.includes("Flüssigkeiten")) {
+        dHtml += `<h4>Flüssigkeiten (L)</h4>` + Object.keys(LABELS).map(k => `<small>${LABELS[k]}</small><input ${dis} id="f_${k}" type="number" step="0.1" value="${w.fluids[k]||0}" oninput="updateW(${ci},${vi},${wi})">`).join('');
+    }
+    document.getElementById("dynamicFields").innerHTML = dHtml;
+}
+
+function renderParts(ci, vi, wi) {
+    let w = get("customers", [])[ci].vehicles[vi].works[wi]; let dis = w.closed ? "disabled" : "";
+    document.getElementById("partsContainer").innerHTML = w.partsList.map((p, i) => `<div class="row-flex"><input ${dis} placeholder="Teil" value="${p.t}" oninput="updatePart(${ci},${vi},${wi},${i},'t',this.value)"><input ${dis} type="number" placeholder="CHF" value="${p.p}" oninput="updatePart(${ci},${vi},${wi},${i},'p',this.value)"></div>`).join('');
+}
+
+function addPartRow(ci, vi, wi) { let c = get("customers", []); c[ci].vehicles[vi].works[wi].partsList.push({t:"",p:0}); set("customers", c); renderParts(ci, vi, wi); }
+function updatePart(ci, vi, wi, i, k, v) { let c = get("customers", []); c[ci].vehicles[vi].works[wi].partsList[i][k] = k==='p'?+v:v; set("customers", c); updateW(ci, vi, wi); }
+function toggleType(t,ci,vi,wi) { let c = get("customers", []); let w = c[ci].vehicles[vi].works[wi]; if(w.types.includes(t)) w.types = w.types.filter(x=>x!==t); else w.types.push(t); set("customers", c); renderDynamic(ci,vi,wi); updateW(ci,vi,wi); }
+
+function updateW(ci,vi,wi) {
+    let c = get("customers", []); let w = c[ci].vehicles[vi].works[wi];
+    w.km = document.getElementById("wkm").value;
+    Object.keys(LABELS).forEach(k => { let el = document.getElementById("f_"+k); if(el) w.fluids[k] = el.value; });
+    document.getElementById("liveTotal").innerText = "Total: CHF " + calcTotal(w); set("customers", c);
+}
+
+function calcTotal(w) {
+    let total = 0;
+    Object.keys(LABELS).forEach(k => total += (parseFloat(w.fluids[k])||0) * (w.prices[k]||0));
+    total += (w.brakeData.v.p + w.brakeData.h.p) + (w.brakeData.v.h + w.brakeData.h.h) * w.rate;
+    w.bulbs.forEach(b => total += b.p + (b.h * w.rate));
+    w.partsList.forEach(p => total += (p.p || 0));
+    return total.toFixed(2);
+}
+
+function saveW(ci, vi, wi, close) {
+    if(!document.getElementById("wkm").value) { alert("KM-Stand fehlt!"); return; }
+    if(confirm("Abschliessen?")) { let c = get("customers", []); c[ci].vehicles[vi].works[wi].closed = true; set("customers", c); works(ci, vi); }
+}
+
+function exportData() { let a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([localStorage.getItem("customers")], {type: "application/json"})); a.download = "backup.json"; a.click(); }
 startApp();
 </script>
 </body>
