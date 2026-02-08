@@ -176,8 +176,13 @@ function renderDynamic(ci, vi, wi) {
         dHtml += `</div>`;
     }
     document.getElementById("dynamicFields").innerHTML = dHtml;
+    
+    // Logik für Flüssigkeiten: Nur anzeigen wenn Service oder Flüssigkeiten aktiv
+    let fluidEl = document.getElementById("fluidSection");
     if(w.types?.includes("Service") || w.types?.includes("Flüssigkeiten")) {
-        document.getElementById("fluidSection").innerHTML = `<h4>Flüssigkeiten (L)</h4>` + Object.keys(LABELS).map(k => `<small>${LABELS[k]}</small><input ${dis} id="f_${k}" type="number" step="0.1" placeholder="Liter" value="${w.fluids[k]||''}" oninput="updateW(${ci},${vi},${wi})">`).join('');
+        fluidEl.innerHTML = `<h4>Flüssigkeiten (L)</h4>` + Object.keys(LABELS).map(k => `<small>${LABELS[k]}</small><input ${dis} id="f_${k}" type="number" step="0.1" placeholder="Liter" value="${w.fluids[k]||''}" oninput="updateW(${ci},${vi},${wi})">`).join('');
+    } else {
+        fluidEl.innerHTML = "";
     }
 }
 
@@ -188,7 +193,6 @@ function renderParts(ci, vi, wi) {
     let dis = w.closed ? "disabled" : ""; 
     let html = "";
     
-    // Teile Zeilen
     w.partsList.forEach((p, i) => {
         html += `<div class="row-flex">
             <input ${dis} placeholder="Teil Bezeichnung" value="${p.t}" oninput="updatePart(${ci},${vi},${wi},${i},'t',this.value)">
@@ -197,7 +201,6 @@ function renderParts(ci, vi, wi) {
         </div>`;
     });
 
-    // Arbeit Zeilen
     w.workList.forEach((work, i) => {
         html += `<div class="row-flex">
             <input ${dis} placeholder="Arbeit Bezeichnung" value="${work.t}" oninput="updateWorkRowItem(${ci},${vi},${wi},${i},'t',this.value)">
@@ -231,16 +234,25 @@ function toggleMfk(p,ci,vi,wi) { let c = get("customers", []); let w = c[ci].veh
 function updateW(ci,vi,wi) {
     let c = get("customers", []); let w = c[ci].vehicles[vi].works[wi];
     w.km = document.getElementById("wkm").value; w.note = document.getElementById("wnote").value;
+    
+    // Nur speichern wenn die Elemente existieren
     Object.keys(LABELS).forEach(k => { let el = document.getElementById("f_"+k); if(el) w.fluids[k] = el.value; });
+    
     if(w.types.includes("Service")) {
-        w.serviceFields = {
-            inspection: +document.getElementById("s_insp").value, oilFilter: +document.getElementById("s_oilf").value, pollenFilter: +document.getElementById("s_poll").value,
-            airFilter: +document.getElementById("s_air").value, fuelFilter: +document.getElementById("s_fuel").value, plugs: +document.getElementById("s_plug").value,
-            plugsT: +document.getElementById("s_plugT").value, belt: +document.getElementById("s_belt").value, beltT: +document.getElementById("s_beltT").value,
-            pump: +document.getElementById("s_pump").value, ribbed: document.getElementById("s_rib").checked, ribbedM: +document.getElementById("s_ribM").value
-        };
+        let insp = document.getElementById("s_insp");
+        if(insp) {
+            w.serviceFields = {
+                inspection: +insp.value, oilFilter: +document.getElementById("s_oilf").value, pollenFilter: +document.getElementById("s_poll").value,
+                airFilter: +document.getElementById("s_air").value, fuelFilter: +document.getElementById("s_fuel").value, plugs: +document.getElementById("s_plug").value,
+                plugsT: +document.getElementById("s_plugT").value, belt: +document.getElementById("s_belt").value, beltT: +document.getElementById("s_beltT").value,
+                pump: +document.getElementById("s_pump").value, ribbed: document.getElementById("s_rib").checked, ribbedM: +document.getElementById("s_ribM").value
+            };
+        }
     }
-    if(w.types.includes("MFK")) w.mfkPrepTime = +document.getElementById("m_prep").value;
+    if(w.types.includes("MFK")) {
+        let prep = document.getElementById("m_prep");
+        if(prep) w.mfkPrepTime = +prep.value;
+    }
     document.getElementById("liveTotal").innerText = "Total: CHF " + calcTotal(w); set("customers", c);
 }
 
@@ -248,10 +260,16 @@ function calcTotal(w) {
     let fT = 0; Object.keys(LABELS).forEach(k => fT += (parseFloat(w.fluids[k])||0) * (w.prices[k]||0));
     let pT = w.partsList.reduce((sum, p) => sum + (+p.p || 0), 0);
     let workListTotal = (w.workList || []).reduce((sum, wk) => sum + ((+wk.h || 0) * w.rate), 0);
-    let sE = (w.serviceFields.inspection||0)*w.rate + (w.serviceFields.oilFilter||0) + (w.serviceFields.pollenFilter||0) + (w.serviceFields.airFilter||0) + (w.serviceFields.fuelFilter||0) + (w.serviceFields.plugs||0) + (w.serviceFields.plugsT||0)*w.rate + (w.serviceFields.belt||0) + (w.serviceFields.beltT||0)*w.rate + (w.serviceFields.pump||0) + (w.serviceFields.ribbedM||0);
-    let mE = (w.mfkPrepTime || 0) * w.rate;
+    
+    let sE = 0;
+    if(w.types.includes("Service") && w.serviceFields) {
+        sE = (w.serviceFields.inspection||0)*w.rate + (w.serviceFields.oilFilter||0) + (w.serviceFields.pollenFilter||0) + (w.serviceFields.airFilter||0) + (w.serviceFields.fuelFilter||0) + (w.serviceFields.plugs||0) + (w.serviceFields.plugsT||0)*w.rate + (w.serviceFields.belt||0) + (w.serviceFields.beltT||0)*w.rate + (w.serviceFields.pump||0) + (w.serviceFields.ribbedM||0);
+    }
+    
+    let mE = (w.types.includes("MFK")) ? (w.mfkPrepTime || 0) * w.rate : 0;
     let cleanE = (w.mfkPoints["Motor & Karosserie gereinigt"]) ? (w.prices.cleanPrice || 0) : 0;
     let tireE = 0; Object.keys(TIRE_LABELS).forEach(k => tireE += (w.tireData[k] || 0) * (w.prices[k] || 0));
+    
     return ( fT + pT + workListTotal + sE + mE + cleanE + tireE ).toFixed(2);
 }
 
