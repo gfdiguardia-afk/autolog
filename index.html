@@ -51,6 +51,8 @@
     <canvas id="canvas" style="display:none;"></canvas>
 </div>
 
+<input type="file" id="fileInput" accept="image/*" style="display:none" onchange="handleFileUpload(event)">
+
 <script>
 const PIN = "1234";
 const app = document.getElementById("app");
@@ -136,18 +138,20 @@ function openCustomer(ci) {
     app.innerHTML = h + `<button onclick="newVehicle(${ci})">+ Fahrzeug</button><button class="btn-danger" onclick="deleteCustomer(${ci})">Kunde löschen</button><button class="btn-sec" onclick="customers()">Zurück</button>`; 
 }
 
-function editVehicle(ci, vi) {
-    let v = get("customers", [])[ci].vehicles[vi];
-    renderVehicleForm(ci, vi, v);
-}
+// Globaler Status für Scanner-Rücksprung
+let currentEditState = { ci: null, vi: null, isNew: false };
 
 function renderVehicleForm(ci, vi, v = null) {
     let isNew = v === null;
+    currentEditState = { ci, vi, isNew };
     let title = isNew ? "Neues Fahrzeug" : "Fahrzeug anpassen";
     let data = v || { brand: '', model: '', plate: '', vin: '', stammnr: '', firstReg: '', cc: '' };
     
     app.innerHTML = `<h3>${title}</h3>
-    <button class="btn-scan" onclick="startScan()">📷 Fahrzeugausweis scannen</button>
+    <div class="row-flex">
+        <button class="btn-scan" onclick="startScan()">📷 Kamera</button>
+        <button class="btn-scan" style="background:#5856d6" onclick="document.getElementById('fileInput').click()">🖼️ Galerie</button>
+    </div>
     <small>Marke</small><input id="vbrand" value="${data.brand}">
     <small>Modell</small><input id="vmodel" value="${data.model}">
     <small>Kennzeichen</small><input id="vplate" value="${data.plate}" oninput="this.value = this.value.toUpperCase()">
@@ -173,10 +177,8 @@ function saveVehicleData(ci, vi, isNew) {
         nextWorkNote: isNew ? "" : c[ci].vehicles[vi].nextWorkNote,
         works: isNew ? [] : c[ci].vehicles[vi].works
     };
-
     if (isNew) c[ci].vehicles.push(vehicleData);
     else c[ci].vehicles[vi] = vehicleData;
-
     set("customers", c);
     openCustomer(ci);
 }
@@ -187,7 +189,6 @@ let streamRef = null;
 async function startScan() {
     let s = get("settings", {});
     if (!s.googleKey) return alert("Bitte Google API Key in den Einstellungen hinterlegen!");
-    
     document.getElementById("camera-layer").style.display = "flex";
     try {
         streamRef = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
@@ -200,25 +201,37 @@ function stopCamera() {
     document.getElementById("camera-layer").style.display = "none";
 }
 
-async function takeSnapshot() {
+function takeSnapshot() {
     const video = document.getElementById("video");
     const canvas = document.getElementById("canvas");
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     canvas.getContext("2d").drawImage(video, 0, 0);
-    
-    const base64Image = canvas.toDataURL("image/jpeg", 0.8).split(",")[1];
+    const base64Image = canvas.toDataURL("image/jpeg", 0.7).split(",")[1];
     stopCamera();
     processOCR(base64Image);
 }
 
+function handleFileUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const base64Image = e.target.result.split(",")[1];
+        processOCR(base64Image);
+    };
+    reader.readAsDataURL(file);
+}
+
 async function processOCR(base64) {
     let key = get("settings", {}).googleKey;
-    app.innerHTML = "<h3>Scanne... bitte warten...</h3>";
+    let oldContent = app.innerHTML;
+    app.innerHTML = `<div style="text-align:center; padding:50px"><h3>🔍 Analysiere Daten...</h3><p>Bitte warten</p></div>`;
     
     try {
         const resp = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${key}`, {
             method: "POST",
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 requests: [{
                     image: { content: base64 },
@@ -227,48 +240,63 @@ async function processOCR(base64) {
             })
         });
         const data = await resp.json();
+        
+        // Bessere Fehlerprüfung
+        if (data.error) {
+            throw new Error(data.error.message || "Google API Fehler");
+        }
+        if (!data.responses || !data.responses[0] || !data.responses[0].fullTextAnnotation) {
+            throw new Error("Kein Text auf dem Bild erkannt oder API-Limit erreicht.");
+        }
+
         const text = data.responses[0].fullTextAnnotation.text;
+        
+        // Zurück zum Formular und Daten einfüllen
+        let v = currentEditState.isNew ? null : get("customers", [])[currentEditState.ci].vehicles[currentEditState.vi];
+        renderVehicleForm(currentEditState.ci, currentEditState.vi, v);
         parseVehicleData(text);
+
     } catch (e) {
         alert("Fehler beim Scannen: " + e.message);
-        menu();
+        let v = currentEditState.isNew ? null : get("customers", [])[currentEditState.ci].vehicles[currentEditState.vi];
+        renderVehicleForm(currentEditState.ci, currentEditState.vi, v);
     }
 }
 
 function parseVehicleData(rawText) {
-    // Regex für Schweizer Fahrzeugausweis Felder
-    const vinMatch = rawText.match(/[A-Z0-9]{17}/); // Fahrgestellnummer
-    const plateMatch = rawText.match(/([A-Z]{2}\s?\d{3,6})/); // Kennzeichen
-    const stammnrMatch = rawText.match(/(\d{3}\.\d{3}\.\d{3})/); // Stammnummer
-    const dateMatch = rawText.match(/(\d{2}\.\d{2}\.\d{4})/); // 1. Inverkehrsetzung
-    const ccMatch = rawText.match(/(\d{3,4})\s?cm/i); // Hubraum
+    const vinMatch = rawText.match(/[A-Z0-9]{17}/);
+    const plateMatch = rawText.match(/([A-Z]{2}\s?\d{3,6})/);
+    const stammnrMatch = rawText.match(/(\d{3}\.\d{3}\.\d{3})/);
+    const dateMatch = rawText.match(/(\d{2}\.\d{2}\.\d{4})/);
+    const ccMatch = rawText.match(/(\d{3,4})\s?cm/i);
 
-    // Marke/Modell Logik (oft in der Nähe von Feld 24)
-    let brand = "";
-    let lines = rawText.split("\n");
-    if(lines.length > 5) brand = lines[2] + " " + lines[3]; // Grobe Schätzung
-
-    // Gefundene Daten ins Formular (Werte bleiben im Speicher bis "Speichern" geklickt wird)
-    document.getElementById("vbrand").value = brand.trim();
-    document.getElementById("vvin").value = vinMatch ? vinMatch[0] : "";
-    document.getElementById("vplate").value = plateMatch ? plateMatch[0].replace(/\s/g, "") : "";
-    document.getElementById("vstammnr").value = stammnrMatch ? stammnrMatch[0] : "";
-    document.getElementById("vfirstReg").value = dateMatch ? dateMatch[0] : "";
-    document.getElementById("vcc").value = ccMatch ? ccMatch[1] : "";
+    if (vinMatch) document.getElementById("vvin").value = vinMatch[0];
+    if (plateMatch) document.getElementById("vplate").value = plateMatch[0].replace(/\s/g, "");
+    if (stammnrMatch) document.getElementById("vstammnr").value = stammnrMatch[0];
+    if (dateMatch) document.getElementById("vfirstReg").value = dateMatch[0];
+    if (ccMatch) document.getElementById("vcc").value = ccMatch[1];
     
-    alert("Scan abgeschlossen. Bitte Daten kurz prüfen.");
-    // UI Refresh erzwingen (da wir app.innerHTML während Scan überschrieben haben)
-    // Wir lassen die Felder einfach so stehen, der User muss speichern.
+    // Einfache Marken-Erkennung
+    const brands = ["VOLKSWAGEN", "VW", "AUDI", "BMW", "MERCEDES", "FORD", "OPEL", "TOYOTA", "SKODA", "SEAT", "RENAULT"];
+    for(let b of brands) {
+        if(rawText.toUpperCase().includes(b)) {
+            document.getElementById("vbrand").value = b;
+            break;
+        }
+    }
+    alert("Scan erfolgreich verarbeitet!");
 }
 
-// --- REST DER FUNKTIONEN (Original übernommen) ---
-
+// --- STANDARD FUNKTIONEN ---
+function editVehicle(ci, vi) {
+    let v = get("customers", [])[ci].vehicles[vi];
+    renderVehicleForm(ci, vi, v);
+}
 function updateVehicleNote(ci, vi, note) {
     let c = get("customers", []);
     c[ci].vehicles[vi].nextWorkNote = note;
     set("customers", c);
 }
-
 function deleteCustomer(ci) { if(confirm("Kunde wirklich löschen?")) { let c = get("customers", []); c.splice(ci, 1); set("customers", c); customers(); } }
 function deleteVehicle(ci, vi) { if(confirm("Fahrzeug wirklich löschen?")) { let c = get("customers", []); c[ci].vehicles.splice(vi, 1); set("customers", c); openCustomer(ci); } }
 function newVehicle(ci) { renderVehicleForm(ci, null, null); }
