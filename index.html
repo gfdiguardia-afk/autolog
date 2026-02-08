@@ -105,11 +105,11 @@ function openCustomer(ci) {
     cust.vehicles.forEach((v, vi) => {
         h += `<div class="card">
                 <div class="clickable-header" onclick="editVehicle(${ci},${vi})">
-                    <strong style="font-size:18px">${v.brand} ${v.model}</strong> 
+                    <strong style="font-size:18px">${v.brand || 'Unbekannt'} ${v.model || ''}</strong> 
                     <span style="background:#333; padding:2px 6px; border-radius:4px; font-family:monospace; margin-left:10px">${v.plate || '---'}</span>
-                    <small style="color:var(--accent)">➔ Bearbeiten</small>
+                    <small style="color:var(--accent)">➔ Details/Bearbeiten</small>
                 </div>
-                <small style="margin-top:10px">Nächste Arbeiten / Notiz:</small>
+                <small style="margin-top:10px">Nächste Arbeiten / Kurz-Notiz:</small>
                 <textarea style="margin-top:5px; height:60px; font-size:14px" placeholder="z.B. Bremsen in 10T KM" oninput="updateVehicleNote(${ci},${vi},this.value)">${v.nextWorkNote || ''}</textarea>
                 <button onclick="works(${ci},${vi})">Rapporte</button>
                 <button class="btn-danger" style="padding:5px; margin-top:5px; font-size:12px" onclick="deleteVehicle(${ci},${vi})">Fahrzeug löschen</button>
@@ -118,40 +118,57 @@ function openCustomer(ci) {
     app.innerHTML = h + `<button onclick="newVehicle(${ci})">+ Fahrzeug</button><button class="btn-danger" onclick="deleteCustomer(${ci})">Kunde löschen</button><button class="btn-sec" onclick="customers()">Zurück</button>`; 
 }
 
+function calcPS(kw) { return kw ? Math.round(kw * 1.35962) : ''; }
+function calcKW(ps) { return ps ? (ps / 1.35962).toFixed(1) : ''; }
+
 function editVehicle(ci, vi) {
     let v = get("customers", [])[ci].vehicles[vi];
-    app.innerHTML = `<h3>Fahrzeug anpassen</h3>
-    <small>Marke</small><input id="vbrand" value="${v.brand}">
-    <small>Modell</small><input id="vmodel" value="${v.model}">
+    app.innerHTML = `<h3>Fahrzeugdaten</h3>
     <small>Kennzeichen</small><input id="vplate" value="${v.plate || ''}" oninput="this.value = this.value.toUpperCase()">
+    <small>Marke</small><input id="vbrand" value="${v.brand || ''}">
+    <small>Modell</small><input id="vmodel" value="${v.model || ''}">
+    <small>Fahrgestellnummer (VIN)</small><input id="vvin" value="${v.vin || ''}" oninput="this.value = this.value.toUpperCase()" maxlength="17" placeholder="17 Stellen">
+    <small>Stammnummer</small><input id="vstammnr" value="${v.stammnr || ''}">
+    <small>Typengenehmigung</small><input id="vtype" value="${v.type || ''}">
+    <small>Hubraum (cm³)</small><input id="vccm" type="number" value="${v.ccm || ''}">
+    <div class="row-flex">
+        <div style="flex:1"><small>Leistung (kW)</small><input id="vkw" type="number" value="${v.kw || ''}" oninput="document.getElementById('vps').value = calcPS(this.value)"></div>
+        <div style="flex:1"><small>Leistung (PS)</small><input id="vps" type="number" value="${calcPS(v.kw)}" oninput="document.getElementById('vkw').value = calcKW(this.value)"></div>
+    </div>
+    <small>1. Inverkehrssetzung</small><input id="vfirst" type="text" placeholder="TT.MM.JJJJ" value="${v.firstDate || ''}">
+    <small>Leergewicht (kg)</small><input id="vweight" type="number" value="${v.weight || ''}">
+    <small>Motorcode</small><input id="vengine" value="${v.engine || ''}">
+    <small>Spezielles / Notizfeld</small><textarea id="vspec" style="height:100px">${v.specNote || ''}</textarea>
+    
     <button class="btn-save" onclick="updateVehicleData(${ci},${vi})">Speichern</button>
     <button class="btn-sec" onclick="openCustomer(${ci})">Abbrechen</button>`;
 }
 
 function updateVehicleData(ci, vi) {
+    let vin = document.getElementById("vvin").value;
+    if (vin && vin.length !== 17) {
+        alert("Fehler: Die Fahrgestellnummer muss genau 17 Stellen haben!");
+        return;
+    }
+
     let c = get("customers", []);
     let v = c[ci].vehicles[vi];
     
-    let newBrand = document.getElementById("vbrand").value;
-    let newModel = document.getElementById("vmodel").value;
-    let newPlate = document.getElementById("vplate").value;
+    v.plate = document.getElementById("vplate").value;
+    v.brand = document.getElementById("vbrand").value;
+    v.model = document.getElementById("vmodel").value;
+    v.vin = vin;
+    v.stammnr = document.getElementById("vstammnr").value;
+    v.type = document.getElementById("vtype").value;
+    v.ccm = document.getElementById("vccm").value;
+    v.kw = document.getElementById("vkw").value;
+    v.firstDate = document.getElementById("vfirst").value;
+    v.weight = document.getElementById("vweight").value;
+    v.engine = document.getElementById("vengine").value;
+    v.specNote = document.getElementById("vspec").value;
 
-    let changes = [];
-    if (v.brand !== newBrand) changes.push(`Marke: ${v.brand} -> ${newBrand}`);
-    if (v.model !== newModel) changes.push(`Modell: ${v.model} -> ${newModel}`);
-    if (v.plate !== newPlate) changes.push(`Kennzeichen: ${v.plate || '---'} -> ${newPlate}`);
-
-    if (changes.length > 0) {
-        if (confirm("Folgende Änderungen speichern?\n\n" + changes.join("\n"))) {
-            v.brand = newBrand;
-            v.model = newModel;
-            v.plate = newPlate;
-            set("customers", c);
-            openCustomer(ci);
-        }
-    } else {
-        openCustomer(ci); // Keine Änderungen
-    }
+    set("customers", c);
+    openCustomer(ci);
 }
 
 function updateVehicleNote(ci, vi, note) {
@@ -162,8 +179,30 @@ function updateVehicleNote(ci, vi, note) {
 
 function deleteCustomer(ci) { if(confirm("Kunde wirklich löschen?")) { let c = get("customers", []); c.splice(ci, 1); set("customers", c); customers(); } }
 function deleteVehicle(ci, vi) { if(confirm("Fahrzeug wirklich löschen?")) { let c = get("customers", []); c[ci].vehicles.splice(vi, 1); set("customers", c); openCustomer(ci); } }
-function newVehicle(ci) { app.innerHTML = `<h3>Neues Fahrzeug</h3><input id="vbrand" placeholder="Marke"><input id="vmodel" placeholder="Modell"><input id="vplate" placeholder="KENNZEICHEN" oninput="this.value = this.value.toUpperCase()"><button class="btn-save" onclick="saveVehicle(${ci})">Speichern</button><button class="btn-sec" onclick="openCustomer(${ci})">Abbrechen</button>`; }
-function saveVehicle(ci) { let c = get("customers", []); c[ci].vehicles.push({ brand: document.getElementById("vbrand").value, model: document.getElementById("vmodel").value, plate: document.getElementById("vplate").value, nextWorkNote: "", works: [] }); set("customers", c); openCustomer(ci); }
+
+function newVehicle(ci) { 
+    app.innerHTML = `<h3>Neues Fahrzeug</h3>
+    <small>Kennzeichen</small><input id="vplate" oninput="this.value = this.value.toUpperCase()">
+    <small>Marke</small><input id="vbrand">
+    <small>Modell</small><input id="vmodel">
+    <button class="btn-save" onclick="saveVehicle(${ci})">Anlegen & Details öffnen</button>
+    <button class="btn-sec" onclick="openCustomer(${ci})">Abbrechen</button>`; 
+}
+
+function saveVehicle(ci) { 
+    let c = get("customers", []); 
+    let newV = { 
+        brand: document.getElementById("vbrand").value, 
+        model: document.getElementById("vmodel").value, 
+        plate: document.getElementById("vplate").value, 
+        vin: "", stammnr: "", type: "", ccm: "", kw: "", firstDate: "", weight: "", engine: "", specNote: "",
+        nextWorkNote: "", 
+        works: [] 
+    }; 
+    c[ci].vehicles.push(newV); 
+    set("customers", c); 
+    editVehicle(ci, c[ci].vehicles.length - 1); 
+}
 
 function works(ci, vi) { let v = get("customers", [])[ci].vehicles[vi]; let h = `<h3>Rapporte: ${v.brand}</h3>`; v.works.forEach((w, wi) => h += `<div class="card ${w.closed?'locked':''}"><strong>${w.date} – ${w.types?.join(', ') || 'Rapport'}</strong><button onclick="openWork(${ci},${vi},${wi})">Details</button></div>`); app.innerHTML = h + `<button onclick="newWork(${ci},${vi})">+ Neuer Rapport</button><button class="btn-sec" onclick="openCustomer(${ci})">Zurück</button>`; }
 function newWork(ci, vi) { let s = get("settings", {rate:50}); let c = get("customers", []); c[ci].vehicles[vi].works.push({ date: new Date().toLocaleDateString('de-CH'), km: "", types: [], mfkPoints: {}, tireData: {}, serviceFields: {}, fluids: {}, note: "", time: 0, partsList: [], workList: [], rate: s.rate, prices: {...s}, closed: false }); set("customers", c); openWork(ci, vi, c[ci].vehicles[vi].works.length - 1); }
@@ -233,8 +272,6 @@ function renderDynamic(ci, vi, wi) {
         dHtml += `</div>`;
     }
     document.getElementById("dynamicFields").innerHTML = dHtml;
-    
-    // Flüssigkeiten Sektion: Nur anzeigen wenn Service oder Flüssigkeiten aktiv
     let fluidSection = document.getElementById("fluidSection");
     if(w.types?.includes("Service") || w.types?.includes("Flüssigkeiten")) {
         fluidSection.innerHTML = `<h4>Flüssigkeiten (L)</h4>` + Object.keys(LABELS).map(k => `<small>${LABELS[k]}</small><input ${dis} id="f_${k}" type="number" step="0.1" placeholder="Liter" value="${w.fluids[k]||''}" oninput="updateW(${ci},${vi},${wi})">`).join('');
@@ -249,7 +286,6 @@ function renderParts(ci, vi, wi) {
     let w = get("customers", [])[ci].vehicles[vi].works[wi]; 
     let d = w.closed ? "disabled" : ""; 
     let html = "";
-    
     w.partsList.forEach((p, i) => {
         html += `<div class="row-flex">
             <input ${d} placeholder="Teil Bezeichnung" value="${p.t}" oninput="updatePart(${ci},${vi},${wi},${i},'t',this.value)">
@@ -257,7 +293,6 @@ function renderParts(ci, vi, wi) {
             <button ${d} class="btn-danger btn-minus" onclick="removePartRow(${ci},${vi},${wi},${i})">-</button>
         </div>`;
     });
-
     w.workList.forEach((work, i) => {
         html += `<div class="row-flex">
             <input ${d} placeholder="Arbeit Bezeichnung" value="${work.t}" oninput="updateWorkRowItem(${ci},${vi},${wi},${i},'t',this.value)">
@@ -265,13 +300,11 @@ function renderParts(ci, vi, wi) {
             <button ${d} class="btn-danger btn-minus" onclick="removeWorkRow(${ci},${vi},${wi},${i})">-</button>
         </div>`;
     });
-
     document.getElementById("partsContainer").innerHTML = html;
 }
 
 function addPartRow(ci, vi, wi) { let c = get("customers", []); c[ci].vehicles[vi].works[wi].partsList.push({t:"",p:0}); set("customers", c); renderParts(ci, vi, wi); }
 function removePartRow(ci, vi, wi, i) { let c = get("customers", []); c[ci].vehicles[vi].works[wi].partsList.splice(i, 1); set("customers", c); renderParts(ci, vi, wi); updateW(ci, vi, wi); }
-
 function addWorkRow(ci, vi, wi) { let c = get("customers", []); c[ci].vehicles[vi].works[wi].workList.push({t:"",h:0}); set("customers", c); renderParts(ci, vi, wi); }
 function removeWorkRow(ci, vi, wi, i) { let c = get("customers", []); c[ci].vehicles[vi].works[wi].workList.splice(i, 1); set("customers", c); renderParts(ci, vi, wi); updateW(ci, vi, wi); }
 
@@ -281,12 +314,7 @@ function updateWorkRowItem(ci, vi, wi, i, k, v) { let c = get("customers", []); 
 function toggleType(t,ci,vi,wi) { 
     let c = get("customers", []); let w = c[ci].vehicles[vi].works[wi]; 
     w.types=w.types||[]; if(w.types.includes(t)) w.types=w.types.filter(x=>x!==t); else w.types.push(t); 
-    
-    // Check ob Flüssigkeiten gelöscht werden müssen
-    if(!w.types.includes("Service") && !w.types.includes("Flüssigkeiten")) {
-        w.fluids = {};
-    }
-
+    if(!w.types.includes("Service") && !w.types.includes("Flüssigkeiten")) w.fluids = {};
     set("customers", c); 
     let repSec = document.getElementById("repairSection");
     if(repSec) repSec.style.display = w.types.includes('Reparatur') ? 'block' : 'none';
@@ -297,13 +325,7 @@ function toggleMfk(p,ci,vi,wi) { let c = get("customers", []); let w = c[ci].veh
 function updateW(ci,vi,wi) {
     let c = get("customers", []); let w = c[ci].vehicles[vi].works[wi];
     w.km = document.getElementById("wkm").value; w.note = document.getElementById("wnote").value;
-    
-    // Flüssigkeiten-Werte aus DOM lesen (falls vorhanden)
-    Object.keys(LABELS).forEach(k => { 
-        let el = document.getElementById("f_"+k); 
-        if(el) w.fluids[k] = el.value; 
-    });
-
+    Object.keys(LABELS).forEach(k => { let el = document.getElementById("f_"+k); if(el) w.fluids[k] = el.value; });
     if(w.types.includes("Service")) {
         w.serviceFields = {
             inspection: +document.getElementById("s_insp").value, oilFilter: +document.getElementById("s_oilf").value, pollenFilter: +document.getElementById("s_poll").value,
