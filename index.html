@@ -99,14 +99,31 @@ function saveCustomer() { let c = get("customers", []); c.push({name: document.g
 function openCustomer(ci) { 
     let cust = get("customers", [])[ci]; 
     let h = `<h3>Fahrzeugliste: ${cust.name}</h3>`; 
-    cust.vehicles.forEach((v, vi) => h += `<div class="card"><strong>${v.brand} ${v.model}</strong><button onclick="works(${ci},${vi})">Rapporte</button><button class="btn-danger" style="padding:5px; margin-top:5px; font-size:12px" onclick="deleteVehicle(${ci},${vi})">Fahrzeug löschen</button></div>`); 
+    cust.vehicles.forEach((v, vi) => {
+        h += `<div class="card">
+                <div style="margin-bottom:10px">
+                    <strong style="font-size:18px">${v.brand} ${v.model}</strong> 
+                    <span style="background:#333; padding:2px 6px; border-radius:4px; font-family:monospace; margin-left:10px">${v.plate || '---'}</span>
+                </div>
+                <small>Nächste Arbeiten / Notiz:</small>
+                <textarea style="margin-top:5px; height:60px; font-size:14px" placeholder="z.B. Bremsen in 10T KM" oninput="updateVehicleNote(${ci},${vi},this.value)">${v.nextWorkNote || ''}</textarea>
+                <button onclick="works(${ci},${vi})">Rapporte</button>
+                <button class="btn-danger" style="padding:5px; margin-top:5px; font-size:12px" onclick="deleteVehicle(${ci},${vi})">Fahrzeug löschen</button>
+              </div>`;
+    }); 
     app.innerHTML = h + `<button onclick="newVehicle(${ci})">+ Fahrzeug</button><button class="btn-danger" onclick="deleteCustomer(${ci})">Kunde löschen</button><button class="btn-sec" onclick="customers()">Zurück</button>`; 
+}
+
+function updateVehicleNote(ci, vi, note) {
+    let c = get("customers", []);
+    c[ci].vehicles[vi].nextWorkNote = note;
+    set("customers", c);
 }
 
 function deleteCustomer(ci) { if(confirm("Kunde wirklich löschen?")) { let c = get("customers", []); c.splice(ci, 1); set("customers", c); customers(); } }
 function deleteVehicle(ci, vi) { if(confirm("Fahrzeug wirklich löschen?")) { let c = get("customers", []); c[ci].vehicles.splice(vi, 1); set("customers", c); openCustomer(ci); } }
 function newVehicle(ci) { app.innerHTML = `<h3>Neues Fahrzeug</h3><input id="vbrand" placeholder="Marke"><input id="vmodel" placeholder="Modell"><input id="vplate" placeholder="KENNZEICHEN" oninput="this.value = this.value.toUpperCase()"><button class="btn-save" onclick="saveVehicle(${ci})">Speichern</button><button class="btn-sec" onclick="openCustomer(${ci})">Abbrechen</button>`; }
-function saveVehicle(ci) { let c = get("customers", []); c[ci].vehicles.push({ brand: document.getElementById("vbrand").value, model: document.getElementById("vmodel").value, plate: document.getElementById("vplate").value, works: [] }); set("customers", c); openCustomer(ci); }
+function saveVehicle(ci) { let c = get("customers", []); c[ci].vehicles.push({ brand: document.getElementById("vbrand").value, model: document.getElementById("vmodel").value, plate: document.getElementById("vplate").value, nextWorkNote: "", works: [] }); set("customers", c); openCustomer(ci); }
 
 function works(ci, vi) { let v = get("customers", [])[ci].vehicles[vi]; let h = `<h3>Rapporte: ${v.brand}</h3>`; v.works.forEach((w, wi) => h += `<div class="card ${w.closed?'locked':''}"><strong>${w.date} – ${w.types?.join(', ') || 'Rapport'}</strong><button onclick="openWork(${ci},${vi},${wi})">Details</button></div>`); app.innerHTML = h + `<button onclick="newWork(${ci},${vi})">+ Neuer Rapport</button><button class="btn-sec" onclick="openCustomer(${ci})">Zurück</button>`; }
 function newWork(ci, vi) { let s = get("settings", {rate:50}); let c = get("customers", []); c[ci].vehicles[vi].works.push({ date: new Date().toLocaleDateString('de-CH'), km: "", types: [], mfkPoints: {}, tireData: {}, serviceFields: {}, fluids: {}, note: "", time: 0, partsList: [], workList: [], rate: s.rate, prices: {...s}, closed: false }); set("customers", c); openWork(ci, vi, c[ci].vehicles[vi].works.length - 1); }
