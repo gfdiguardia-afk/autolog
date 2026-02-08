@@ -227,7 +227,8 @@ function vehicleFormHtml(v = {}, ci, vi = null) {
     <small>1. Inverkehrssetzung</small><input id="vfirst" type="text" placeholder="TT.MM.JJJJ" value="${v.firstDate || ''}">
     <small>Leergewicht (kg)</small><input id="vweight" type="number" value="${v.weight || ''}">
     
-    <small>letzte MFK</small><input id="vlastmfk" type="text" placeholder="TT.MM.JJJJ" value="${v.lastMfk || ''}">
+    <small>Letzte MFK</small><input id="vlastmfk" type="text" placeholder="TT.MM.JJJJ" value="${v.lastMfk || ''}">
+    <small>Letzte Inspection</small><input id="vlastmfk" type="text" placeholder="TT.MM.JJJJ" value="${v.lastMfk || ''}">
     <div class="row-flex">
         <div style="flex:1"><small>Serviceintervall (Monate)</small><input id="vintmon" type="number" placeholder="z.B. 12" value="${v.intMonths || ''}"></div>
         <div style="flex:1"><small>Serviceintervall (km)</small><input id="vintkm" type="number" placeholder="z.B. 20000" value="${v.intKm || ''}"></div>
