@@ -177,7 +177,6 @@ function renderDynamic(ci, vi, wi) {
     }
     document.getElementById("dynamicFields").innerHTML = dHtml;
     
-    // Logik für Flüssigkeiten: Nur anzeigen wenn Service oder Flüssigkeiten aktiv
     let fluidEl = document.getElementById("fluidSection");
     if(w.types?.includes("Service") || w.types?.includes("Flüssigkeiten")) {
         fluidEl.innerHTML = `<h4>Flüssigkeiten (L)</h4>` + Object.keys(LABELS).map(k => `<small>${LABELS[k]}</small><input ${dis} id="f_${k}" type="number" step="0.1" placeholder="Liter" value="${w.fluids[k]||''}" oninput="updateW(${ci},${vi},${wi})">`).join('');
@@ -223,19 +222,38 @@ function updateWorkRowItem(ci, vi, wi, i, k, v) { let c = get("customers", []); 
 
 function toggleType(t,ci,vi,wi) { 
     let c = get("customers", []); let w = c[ci].vehicles[vi].works[wi]; 
-    w.types=w.types||[]; if(w.types.includes(t)) w.types=w.types.filter(x=>x!==t); else w.types.push(t); 
+    w.types=w.types||[]; 
+    
+    if(w.types.includes(t)) {
+        w.types = w.types.filter(x => x !== t);
+        // Reset Logik beim Abwählen
+        if(t === "Service") w.serviceFields = {};
+        if(t === "MFK") { w.mfkPrepTime = 0; w.mfkPoints = {}; }
+        if(t === "Flüssigkeiten") { 
+            // Falls nicht durch Service noch aktiv, Flüssigkeiten nullen
+            if(!w.types.includes("Service")) w.fluids = {}; 
+        }
+        if(t === "Reifenwechsel") w.tireData = {};
+        if(t === "Reparatur") { w.partsList = []; w.workList = []; }
+        
+        // Extra Check für Flüssigkeiten: Wenn weder Service noch Flüssigkeiten aktiv sind
+        if(!w.types.includes("Service") && !w.types.includes("Flüssigkeiten")) w.fluids = {};
+    } else {
+        w.types.push(t);
+    }
+    
     set("customers", c); 
     let repSec = document.getElementById("repairSection");
     if(repSec) repSec.style.display = w.types.includes('Reparatur') ? 'block' : 'none';
     renderDynamic(ci,vi,wi); updateW(ci,vi,wi); 
 }
+
 function toggleMfk(p,ci,vi,wi) { let c = get("customers", []); let w = c[ci].vehicles[vi].works[wi]; w.mfkPoints[p]=!w.mfkPoints[p]; set("customers", c); renderDynamic(ci,vi,wi); updateW(ci,vi,wi); }
 
 function updateW(ci,vi,wi) {
     let c = get("customers", []); let w = c[ci].vehicles[vi].works[wi];
     w.km = document.getElementById("wkm").value; w.note = document.getElementById("wnote").value;
     
-    // Nur speichern wenn die Elemente existieren
     Object.keys(LABELS).forEach(k => { let el = document.getElementById("f_"+k); if(el) w.fluids[k] = el.value; });
     
     if(w.types.includes("Service")) {
@@ -257,7 +275,12 @@ function updateW(ci,vi,wi) {
 }
 
 function calcTotal(w) {
-    let fT = 0; Object.keys(LABELS).forEach(k => fT += (parseFloat(w.fluids[k])||0) * (w.prices[k]||0));
+    let fT = 0; 
+    // Flüssigkeiten nur berechnen, wenn Kategorie aktiv
+    if(w.types.includes("Service") || w.types.includes("Flüssigkeiten")) {
+        Object.keys(LABELS).forEach(k => fT += (parseFloat(w.fluids[k])||0) * (w.prices[k]||0));
+    }
+    
     let pT = w.partsList.reduce((sum, p) => sum + (+p.p || 0), 0);
     let workListTotal = (w.workList || []).reduce((sum, wk) => sum + ((+wk.h || 0) * w.rate), 0);
     
@@ -267,7 +290,7 @@ function calcTotal(w) {
     }
     
     let mE = (w.types.includes("MFK")) ? (w.mfkPrepTime || 0) * w.rate : 0;
-    let cleanE = (w.mfkPoints["Motor & Karosserie gereinigt"]) ? (w.prices.cleanPrice || 0) : 0;
+    let cleanE = (w.mfkPoints && w.mfkPoints["Motor & Karosserie gereinigt"]) ? (w.prices.cleanPrice || 0) : 0;
     let tireE = 0; Object.keys(TIRE_LABELS).forEach(k => tireE += (w.tireData[k] || 0) * (w.prices[k] || 0));
     
     return ( fT + pT + workListTotal + sE + mE + cleanE + tireE ).toFixed(2);
