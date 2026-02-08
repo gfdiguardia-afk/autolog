@@ -31,6 +31,8 @@
         small { display: block; margin-top: 4px; color: var(--text-dim); font-size: 12px; }
         hr { border: 0; border-top: 1px solid #333; margin: 20px 0; }
         .btn-minus { width: 44px; height: 44px; padding: 0; flex-shrink: 0; margin: 0; display: flex; align-items: center; justify-content: center; font-size: 24px; }
+        .clickable-header { cursor: pointer; padding: 5px; border-radius: 5px; transition: background 0.2s; }
+        .clickable-header:hover { background: #2c2c2e; }
     </style>
 </head>
 <body>
@@ -96,22 +98,43 @@ function performSearch() {
 
 function newCustomer() { app.innerHTML = `<h3>Neuer Kunde</h3><input id="cname" placeholder="Name"><button class="btn-save" onclick="saveCustomer()">Anlegen</button>`; }
 function saveCustomer() { let c = get("customers", []); c.push({name: document.getElementById("cname").value, vehicles: []}); set("customers", c); customers(); }
+
 function openCustomer(ci) { 
     let cust = get("customers", [])[ci]; 
     let h = `<h3>Fahrzeugliste: ${cust.name}</h3>`; 
     cust.vehicles.forEach((v, vi) => {
         h += `<div class="card">
-                <div style="margin-bottom:10px">
+                <div class="clickable-header" onclick="editVehicle(${ci},${vi})">
                     <strong style="font-size:18px">${v.brand} ${v.model}</strong> 
                     <span style="background:#333; padding:2px 6px; border-radius:4px; font-family:monospace; margin-left:10px">${v.plate || '---'}</span>
+                    <small style="color:var(--accent)">➔ Bearbeiten</small>
                 </div>
-                <small>Nächste Arbeiten / Notiz:</small>
+                <small style="margin-top:10px">Nächste Arbeiten / Notiz:</small>
                 <textarea style="margin-top:5px; height:60px; font-size:14px" placeholder="z.B. Bremsen in 10T KM" oninput="updateVehicleNote(${ci},${vi},this.value)">${v.nextWorkNote || ''}</textarea>
                 <button onclick="works(${ci},${vi})">Rapporte</button>
                 <button class="btn-danger" style="padding:5px; margin-top:5px; font-size:12px" onclick="deleteVehicle(${ci},${vi})">Fahrzeug löschen</button>
               </div>`;
     }); 
     app.innerHTML = h + `<button onclick="newVehicle(${ci})">+ Fahrzeug</button><button class="btn-danger" onclick="deleteCustomer(${ci})">Kunde löschen</button><button class="btn-sec" onclick="customers()">Zurück</button>`; 
+}
+
+function editVehicle(ci, vi) {
+    let v = get("customers", [])[ci].vehicles[vi];
+    app.innerHTML = `<h3>Fahrzeug anpassen</h3>
+    <small>Marke</small><input id="vbrand" value="${v.brand}">
+    <small>Modell</small><input id="vmodel" value="${v.model}">
+    <small>Kennzeichen</small><input id="vplate" value="${v.plate || ''}" oninput="this.value = this.value.toUpperCase()">
+    <button class="btn-save" onclick="updateVehicleData(${ci},${vi})">Speichern</button>
+    <button class="btn-sec" onclick="openCustomer(${ci})">Abbrechen</button>`;
+}
+
+function updateVehicleData(ci, vi) {
+    let c = get("customers", []);
+    c[ci].vehicles[vi].brand = document.getElementById("vbrand").value;
+    c[ci].vehicles[vi].model = document.getElementById("vmodel").value;
+    c[ci].vehicles[vi].plate = document.getElementById("vplate").value;
+    set("customers", c);
+    openCustomer(ci);
 }
 
 function updateVehicleNote(ci, vi, note) {
