@@ -35,7 +35,6 @@
         .clickable-header:hover { background: #2c2c2e; }
         .img-preview { width: 100%; border-radius: 8px; margin-top: 10px; display: none; cursor: pointer; border: 1px solid #444; }
 
-        /* Print Styles für Rechnung */
         @media print {
             body * { visibility: hidden; background: white !important; color: black !important; }
             #printArea, #printArea * { visibility: visible; }
@@ -45,7 +44,7 @@
             .inv-table th { border-bottom: 2px solid #000; text-align: left; padding: 8px; }
             .inv-table td { border-bottom: 1px solid #eee; padding: 8px; }
             .total-row { font-weight: bold; font-size: 16px; }
-            .address-container { display: flex; flex-direction: column; padding-top: 40mm; padding-left: 20mm; margin-bottom: 30mm; }
+            .address-container { display: flex; flex-direction: column; padding-top: 10mm; margin-bottom: 20mm; font-size: 14px; line-height: 1.4; }
         }
     </style>
 </head>
@@ -65,7 +64,6 @@ const TIRE_LABELS = { t_mont: "Reifen montieren", t_vent: "Ventil", t_alu: "Ausw
 const get = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch(e) { return d; } };
 const set = (k, v) => localStorage.setItem(k, JSON.stringify(v));
 
-// Leert den Rechnungsbereich, wenn man zurück navigiert
 function clearPrint() { document.getElementById("printArea").innerHTML = ""; }
 
 function startApp() { clearPrint(); let s = get("settings", { pinActive: true }); if (s.pinActive) showPin(); else menu(); }
@@ -307,15 +305,12 @@ function openWork(ci, vi, wi) {
 
 function generateInvoice(ci, vi, wi) {
     const cList = get("customers", []); const cust = cList[ci]; const v = cust.vehicles[vi]; const w = v.works[wi];
-    const s = get("settings", {});
     
     let rows = "";
-    // Flüssigkeiten
     Object.keys(LABELS).forEach(k => {
         let qty = parseFloat(w.fluids[k]);
         if(qty > 0) rows += `<tr><td>${LABELS[k]}</td><td>${qty.toFixed(1)} L</td><td>${w.prices[k]}</td><td>${(qty * w.prices[k]).toFixed(2)}</td></tr>`;
     });
-    // Service-Teile
     const sf = w.serviceFields || {};
     if(sf.oilFilter > 0) rows += `<tr><td>Ölfilter</td><td>1 Stk</td><td>${sf.oilFilter}</td><td>${sf.oilFilter.toFixed(2)}</td></tr>`;
     if(sf.pollenFilter > 0) rows += `<tr><td>Pollenfilter</td><td>1 Stk</td><td>${sf.pollenFilter}</td><td>${sf.pollenFilter.toFixed(2)}</td></tr>`;
@@ -326,45 +321,36 @@ function generateInvoice(ci, vi, wi) {
     if(sf.pump > 0) rows += `<tr><td>Wasserpumpe</td><td>1 Stk</td><td>${sf.pump}</td><td>${sf.pump.toFixed(2)}</td></tr>`;
     if(sf.ribbedM > 0) rows += `<tr><td>Keilrippenriemen</td><td>1 Stk</td><td>${sf.ribbedM}</td><td>${sf.ribbedM.toFixed(2)}</td></tr>`;
 
-    // Arbeitszeit
     let totalH = (sf.inspection||0) + (sf.plugsT||0) + (sf.beltT||0) + (w.mfkPrepTime||0);
     (w.workList||[]).forEach(wk => totalH += (wk.h || 0));
     if(totalH > 0) rows += `<tr><td>Arbeitsaufwand total</td><td>${totalH.toFixed(1)} Std</td><td>${w.rate}</td><td>${(totalH * w.rate).toFixed(2)}</td></tr>`;
 
-    // MFK Reinigung
     if(w.mfkPoints?.["Motor & Karosserie gereinigt"]) rows += `<tr><td>Reinigung Motor & Karosserie</td><td>1</td><td>${w.prices.cleanPrice}</td><td>${w.prices.cleanPrice.toFixed(2)}</td></tr>`;
 
-    // Reifen
     Object.keys(TIRE_LABELS).forEach(k => {
         let qty = w.tireData[k];
         if(qty > 0) rows += `<tr><td>${TIRE_LABELS[k]}</td><td>${qty} Stk</td><td>${w.prices[k]}</td><td>${(qty * w.prices[k]).toFixed(2)}</td></tr>`;
     });
 
-    // Manuelle Teile
     (w.partsList||[]).forEach(p => {
         if(p.p > 0) rows += `<tr><td>${p.t || 'Diverse Teile'}</td><td>1</td><td>${p.p}</td><td>${p.p.toFixed(2)}</td></tr>`;
     });
 
     const printHtml = `
         <div style="padding: 10mm 15mm;">
-            <div style="display:flex; justify-content:space-between; margin-bottom:10mm">
-                <div><strong>AutoLog</strong><br>Werkstattstrasse 1<br>8000 Zürich</div>
-                <div></div>
-            </div>
-            
             <div class="address-container">
-                <strong>${cust.company || ''}</strong>
-                <span>${cust.firstname} ${cust.lastname}</span>
-                <span>${cust.street}</span>
-                <span>${cust.zip} ${cust.city}</span>
+                <strong>${cust.company || ''}</strong><br>
+                ${cust.firstname} ${cust.lastname}<br>
+                ${cust.street}<br>
+                ${cust.zip} ${cust.city}
             </div>
 
-            <div style="margin-bottom:15mm">
-                <h1 style="margin:0; font-size: 28px;">RECHNUNG</h1>
+            <div style="margin-bottom:10mm">
+                <h1 style="margin:0; font-size: 24px;">RECHNUNG</h1>
                 <div style="margin-top:5px">Datum: ${w.date} | KM-Stand: ${w.km}</div>
             </div>
 
-            <div style="background:#f2f2f2; padding:8px; margin-bottom:10px; border-radius: 4px;">
+            <div style="background:#f2f2f2; padding:8px; margin-bottom:10px; border-radius: 4px; font-size: 11px;">
                 <strong>Fahrzeug:</strong> ${v.brand} ${v.model} (${v.plate}) | <strong>VIN:</strong> ${v.vin || '-'}
             </div>
 
