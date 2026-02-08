@@ -130,7 +130,6 @@ function openWork(ci, vi, wi) {
         </div>
     </div>
 
-    <h4>Zusätzliche Arbeitszeit</h4><input ${dis} id="wtime" type="number" step="0.1" placeholder="Std" value="${w.time||''}" oninput="updateW(${ci},${vi},${wi})">
     <textarea ${dis} id="wnote" placeholder="Bemerkungen" oninput="updateW(${ci},${vi},${wi})">${w.note}</textarea>
     <hr><div style="font-size:24px; font-weight:bold; color:var(--success)" id="liveTotal">Total: CHF ${calcTotal(w)}</div>
     ${!w.closed ? `<button onclick="saveW(${ci},${vi},${wi}, false)">💾 Zwischenspeichern</button><button class="btn-save" onclick="saveW(${ci},${vi},${wi}, true)">✅ Rapport abschliessen</button>` : ''}
@@ -189,7 +188,6 @@ function renderParts(ci, vi, wi) {
     let dis = w.closed ? "disabled" : ""; 
     let html = "";
     
-    // Teile und Arbeit zusammen im Container rendern
     w.partsList.forEach((p, i) => {
         html += `<div class="row-flex">
             <input ${dis} placeholder="Teil Bezeichnung" value="${p.t}" oninput="updatePart(${ci},${vi},${wi},${i},'t',this.value)">
@@ -222,14 +220,15 @@ function toggleType(t,ci,vi,wi) {
     let c = get("customers", []); let w = c[ci].vehicles[vi].works[wi]; 
     w.types=w.types||[]; if(w.types.includes(t)) w.types=w.types.filter(x=>x!==t); else w.types.push(t); 
     set("customers", c); 
-    document.getElementById("repairSection").style.display = w.types.includes('Reparatur') ? 'block' : 'none';
+    let repSec = document.getElementById("repairSection");
+    if(repSec) repSec.style.display = w.types.includes('Reparatur') ? 'block' : 'none';
     renderDynamic(ci,vi,wi); updateW(ci,vi,wi); 
 }
 function toggleMfk(p,ci,vi,wi) { let c = get("customers", []); let w = c[ci].vehicles[vi].works[wi]; w.mfkPoints[p]=!w.mfkPoints[p]; set("customers", c); renderDynamic(ci,vi,wi); updateW(ci,vi,wi); }
 
 function updateW(ci,vi,wi) {
     let c = get("customers", []); let w = c[ci].vehicles[vi].works[wi];
-    w.km = document.getElementById("wkm").value; w.time = +document.getElementById("wtime").value; w.note = document.getElementById("wnote").value;
+    w.km = document.getElementById("wkm").value; w.note = document.getElementById("wnote").value;
     Object.keys(LABELS).forEach(k => { let el = document.getElementById("f_"+k); if(el) w.fluids[k] = el.value; });
     if(w.types.includes("Service")) {
         w.serviceFields = {
@@ -251,7 +250,7 @@ function calcTotal(w) {
     let mE = (w.mfkPrepTime || 0) * w.rate;
     let cleanE = (w.mfkPoints["Motor & Karosserie gereinigt"]) ? (w.prices.cleanPrice || 0) : 0;
     let tireE = 0; Object.keys(TIRE_LABELS).forEach(k => tireE += (w.tireData[k] || 0) * (w.prices[k] || 0));
-    return ( (w.time * w.rate) + fT + pT + workListTotal + sE + mE + cleanE + tireE ).toFixed(2);
+    return ( fT + pT + workListTotal + sE + mE + cleanE + tireE ).toFixed(2);
 }
 
 function saveW(ci, vi, wi, close) {
