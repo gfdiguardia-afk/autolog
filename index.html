@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AutoLog Pro</title>
+    <title>AutoLog Pro Scan</title>
     <style>
         :root {
             --bg: #121212; --card: #1e1e1e; --accent: #007aff;
@@ -16,6 +16,7 @@
         button { width: 100%; margin: 8px 0; padding: 14px; border: none; border-radius: 10px; background: var(--accent); color: white; font-size: 16px; font-weight: 600; cursor: pointer; }
         .btn-sec { background: #333; } .btn-danger { background: var(--danger); } .btn-save { background: var(--success); }
         .btn-work { background: var(--work-btn); }
+        .btn-scan { background: #ff9500; }
         .btn-qty { width: auto; padding: 8px 15px; margin: 0 2px; background: #3a3a3c; font-size: 14px; }
         .btn-qty.active { background: var(--accent); }
         input, select, textarea { width: 100%; margin: 8px 0; padding: 12px; box-sizing: border-box; background: #2c2c2e; color: #fff; border: 1px solid #3a3a3c; border-radius: 8px; font-size: 16px; }
@@ -33,15 +34,22 @@
         .btn-minus { width: 44px; height: 44px; padding: 0; flex-shrink: 0; margin: 0; display: flex; align-items: center; justify-content: center; font-size: 24px; }
         .clickable-header { cursor: pointer; padding: 5px; border-radius: 5px; transition: background 0.2s; }
         .clickable-header:hover { background: #2c2c2e; }
-        .scan-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:1000; justify-content:center; align-items:center; color:white; }
+        #camera-layer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 1000; display: none; flex-direction: column; }
     </style>
 </head>
 <body>
 
 <header>AutoLog Pro</header>
 <div class="container" id="app"></div>
-<div id="scanOverlay" class="scan-overlay">Hologramm wird analysiert...</div>
-<input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none" onchange="handleScan(event)">
+
+<div id="camera-layer">
+    <video id="video" style="width: 100%; height: 70%; object-fit: cover;" autoplay playsinline></video>
+    <div style="padding: 20px;">
+        <button onclick="takeSnapshot()">Foto aufnehmen & Scannen</button>
+        <button class="btn-sec" onclick="stopCamera()">Abbrechen</button>
+    </div>
+    <canvas id="canvas" style="display:none;"></canvas>
+</div>
 
 <script>
 const PIN = "1234";
@@ -58,73 +66,10 @@ function showPin() { app.innerHTML = `<div style="text-align:center; padding-top
 function checkPin() { if(document.getElementById("pinInput").value === PIN) menu(); else alert("Falscher PIN"); }
 function menu() { app.innerHTML = `<button onclick="customers()">👥 Kundenverwaltung</button><button onclick="settings()">⚙️ Grundeinstellungen</button><button class="btn-sec" onclick="exportData()">💾 Daten-Backup</button>`; }
 
-// --- NEU: SCAN FUNKTIONEN ---
-let currentCiForScan = null;
-
-function triggerScan(ci) {
-    currentCiForScan = ci;
-    let s = get("settings", {});
-    if(!s.googleApiKey) return alert("Bitte zuerst Google API Key in den Einstellungen hinterlegen!");
-    document.getElementById("cameraInput").click();
-}
-
-async function handleScan(event) {
-    const file = event.target.files[0];
-    if(!file) return;
-    
-    document.getElementById("scanOverlay").style.display = "flex";
-    const s = get("settings", {});
-    
-    try {
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-            const base64Image = e.target.result.split(',')[1];
-            const response = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${s.googleApiKey}`, {
-                method: 'POST',
-                body: JSON.stringify({
-                    requests: [{
-                        image: { content: base64Image },
-                        features: [{ type: 'TEXT_DETECTION' }]
-                    }]
-                })
-            });
-            const data = await response.json();
-            const text = data.responses[0]?.fullTextAnnotation?.text || "";
-            parseVehicleInfo(text);
-        };
-        reader.readAsDataURL(file);
-    } catch (err) {
-        alert("Scan Fehler: " + err);
-    } finally {
-        document.getElementById("scanOverlay").style.display = "none";
-    }
-}
-
-function parseVehicleInfo(text) {
-    // Einfache Schweizer Kennzeichen Suche (z.B. LU 123456)
-    const plateMatch = text.match(/([A-Z]{2})\s?(\d{2,6})/);
-    if(plateMatch) document.getElementById("vplate").value = plateMatch[0];
-
-    // Bekannte Marken Liste
-    const brands = ["BMW", "AUDI", "VW", "VOLKSWAGEN", "MERCEDES", "OPEL", "TOYOTA", "SKODA", "FORD", "FIAT", "TESLA", "PEUGEOT", "RENAULT"];
-    brands.forEach(b => {
-        if(text.toUpperCase().includes(b)) document.getElementById("vbrand").value = b;
-    });
-
-    // Modell Suche (meistens nach der Marke oder im Text)
-    const lines = text.split('\n');
-    lines.forEach(line => {
-        if(line.includes("323i") || line.includes("A8") || line.includes("Golf")) {
-             document.getElementById("vmodel").value = line.trim();
-        }
-    });
-}
-// --- ENDE SCAN FUNKTIONEN ---
-
 function settings() {
-    let s = get("settings", { pinActive: true, rate: 50, oil: 15, coolant: 10, brake: 20, gear: 25, servo: 18, washer: 2, cleanPrice: 20, t_mont: 20, t_vent: 5, t_alu: 15, t_met: 10, t_clean: 10, t_store: 40, t_repair: 15, googleApiKey: "" });
+    let s = get("settings", { pinActive: true, rate: 50, oil: 15, coolant: 10, brake: 20, gear: 25, servo: 18, washer: 2, cleanPrice: 20, t_mont: 20, t_vent: 5, t_alu: 15, t_met: 10, t_clean: 10, t_store: 40, t_repair: 15, googleKey: "" });
     app.innerHTML = `<h3>Grundeinstellungen</h3>
-    <small>Google Cloud Vision API Key</small><input id="googleApiKey" type="password" placeholder="AIza..." value="${s.googleApiKey||''}">
+    <small>Google Cloud API Key (Vision)</small><input id="googleKey" type="text" placeholder="AIza..." value="${s.googleKey||''}">
     <small>PIN-Schutz</small><select id="pinActive"><option value="true" ${s.pinActive?'selected':''}>Aktiv</option><option value="false" ${!s.pinActive?'selected':''}>Aus</option></select>
     <small>Stundenansatz (CHF)</small><input id="rate" type="number" placeholder="CHF" value="${s.rate||''}">
     <small>Reinigung (CHF)</small><input id="cleanPrice" type="number" placeholder="CHF" value="${s.cleanPrice||''}">
@@ -138,7 +83,7 @@ function saveSettings() {
         pinActive: document.getElementById("pinActive").value === "true", 
         rate: +document.getElementById("rate").value, 
         cleanPrice: +document.getElementById("cleanPrice").value,
-        googleApiKey: document.getElementById("googleApiKey").value
+        googleKey: document.getElementById("googleKey").value 
     };
     Object.keys(LABELS).forEach(k => newS[k] = +document.getElementById(k).value);
     Object.keys(TIRE_LABELS).forEach(k => newS[k] = +document.getElementById(k).value);
@@ -180,7 +125,7 @@ function openCustomer(ci) {
                 <div class="clickable-header" onclick="editVehicle(${ci},${vi})">
                     <strong style="font-size:18px">${v.brand} ${v.model}</strong> 
                     <span style="background:#333; padding:2px 6px; border-radius:4px; font-family:monospace; margin-left:10px">${v.plate || '---'}</span>
-                    <small style="color:var(--accent)">➔ Bearbeiten</small>
+                    <small style="color:var(--accent)">➔ Bearbeiten / Details</small>
                 </div>
                 <small style="margin-top:10px">Nächste Arbeiten / Notiz:</small>
                 <textarea style="margin-top:5px; height:60px; font-size:14px" placeholder="z.B. Bremsen in 10T KM" oninput="updateVehicleNote(${ci},${vi},this.value)">${v.nextWorkNote || ''}</textarea>
@@ -193,23 +138,130 @@ function openCustomer(ci) {
 
 function editVehicle(ci, vi) {
     let v = get("customers", [])[ci].vehicles[vi];
-    app.innerHTML = `<h3>Fahrzeug anpassen</h3>
-    <small>Marke</small><input id="vbrand" value="${v.brand}">
-    <small>Modell</small><input id="vmodel" value="${v.model}">
-    <small>Kennzeichen</small><input id="vplate" value="${v.plate || ''}" oninput="this.value = this.value.toUpperCase()">
-    <button class="btn-save" onclick="updateVehicleData(${ci},${vi})">Speichern</button>
+    renderVehicleForm(ci, vi, v);
+}
+
+function renderVehicleForm(ci, vi, v = null) {
+    let isNew = v === null;
+    let title = isNew ? "Neues Fahrzeug" : "Fahrzeug anpassen";
+    let data = v || { brand: '', model: '', plate: '', vin: '', stammnr: '', firstReg: '', cc: '' };
+    
+    app.innerHTML = `<h3>${title}</h3>
+    <button class="btn-scan" onclick="startScan()">📷 Fahrzeugausweis scannen</button>
+    <small>Marke</small><input id="vbrand" value="${data.brand}">
+    <small>Modell</small><input id="vmodel" value="${data.model}">
+    <small>Kennzeichen</small><input id="vplate" value="${data.plate}" oninput="this.value = this.value.toUpperCase()">
+    <small>Fahrgestell-Nr (VIN)</small><input id="vvin" value="${data.vin || ''}">
+    <small>Stammnummer</small><input id="vstammnr" value="${data.stammnr || ''}">
+    <small>1. Inverkehrsetzung</small><input id="vfirstReg" value="${data.firstReg || ''}" placeholder="TT.MM.JJJJ">
+    <small>Hubraum (ccm)</small><input id="vcc" type="number" value="${data.cc || ''}">
+    
+    <button class="btn-save" onclick="saveVehicleData(${ci},${vi},${isNew})">Speichern</button>
     <button class="btn-sec" onclick="openCustomer(${ci})">Abbrechen</button>`;
 }
 
-function updateVehicleData(ci, vi) {
+function saveVehicleData(ci, vi, isNew) {
     let c = get("customers", []);
-    let v = c[ci].vehicles[vi];
-    let newBrand = document.getElementById("vbrand").value;
-    let newModel = document.getElementById("vmodel").value;
-    let newPlate = document.getElementById("vplate").value;
-    v.brand = newBrand; v.model = newModel; v.plate = newPlate;
-    set("customers", c); openCustomer(ci);
+    let vehicleData = {
+        brand: document.getElementById("vbrand").value,
+        model: document.getElementById("vmodel").value,
+        plate: document.getElementById("vplate").value,
+        vin: document.getElementById("vvin").value,
+        stammnr: document.getElementById("vstammnr").value,
+        firstReg: document.getElementById("vfirstReg").value,
+        cc: document.getElementById("vcc").value,
+        nextWorkNote: isNew ? "" : c[ci].vehicles[vi].nextWorkNote,
+        works: isNew ? [] : c[ci].vehicles[vi].works
+    };
+
+    if (isNew) c[ci].vehicles.push(vehicleData);
+    else c[ci].vehicles[vi] = vehicleData;
+
+    set("customers", c);
+    openCustomer(ci);
 }
+
+// --- SCANNER LOGIC ---
+let streamRef = null;
+
+async function startScan() {
+    let s = get("settings", {});
+    if (!s.googleKey) return alert("Bitte Google API Key in den Einstellungen hinterlegen!");
+    
+    document.getElementById("camera-layer").style.display = "flex";
+    try {
+        streamRef = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        document.getElementById("video").srcObject = streamRef;
+    } catch (err) { alert("Kamera-Zugriff verweigert"); stopCamera(); }
+}
+
+function stopCamera() {
+    if (streamRef) streamRef.getTracks().forEach(t => t.stop());
+    document.getElementById("camera-layer").style.display = "none";
+}
+
+async function takeSnapshot() {
+    const video = document.getElementById("video");
+    const canvas = document.getElementById("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext("2d").drawImage(video, 0, 0);
+    
+    const base64Image = canvas.toDataURL("image/jpeg", 0.8).split(",")[1];
+    stopCamera();
+    processOCR(base64Image);
+}
+
+async function processOCR(base64) {
+    let key = get("settings", {}).googleKey;
+    app.innerHTML = "<h3>Scanne... bitte warten...</h3>";
+    
+    try {
+        const resp = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${key}`, {
+            method: "POST",
+            body: JSON.stringify({
+                requests: [{
+                    image: { content: base64 },
+                    features: [{ type: "TEXT_DETECTION" }]
+                }]
+            })
+        });
+        const data = await resp.json();
+        const text = data.responses[0].fullTextAnnotation.text;
+        parseVehicleData(text);
+    } catch (e) {
+        alert("Fehler beim Scannen: " + e.message);
+        menu();
+    }
+}
+
+function parseVehicleData(rawText) {
+    // Regex für Schweizer Fahrzeugausweis Felder
+    const vinMatch = rawText.match(/[A-Z0-9]{17}/); // Fahrgestellnummer
+    const plateMatch = rawText.match(/([A-Z]{2}\s?\d{3,6})/); // Kennzeichen
+    const stammnrMatch = rawText.match(/(\d{3}\.\d{3}\.\d{3})/); // Stammnummer
+    const dateMatch = rawText.match(/(\d{2}\.\d{2}\.\d{4})/); // 1. Inverkehrsetzung
+    const ccMatch = rawText.match(/(\d{3,4})\s?cm/i); // Hubraum
+
+    // Marke/Modell Logik (oft in der Nähe von Feld 24)
+    let brand = "";
+    let lines = rawText.split("\n");
+    if(lines.length > 5) brand = lines[2] + " " + lines[3]; // Grobe Schätzung
+
+    // Gefundene Daten ins Formular (Werte bleiben im Speicher bis "Speichern" geklickt wird)
+    document.getElementById("vbrand").value = brand.trim();
+    document.getElementById("vvin").value = vinMatch ? vinMatch[0] : "";
+    document.getElementById("vplate").value = plateMatch ? plateMatch[0].replace(/\s/g, "") : "";
+    document.getElementById("vstammnr").value = stammnrMatch ? stammnrMatch[0] : "";
+    document.getElementById("vfirstReg").value = dateMatch ? dateMatch[0] : "";
+    document.getElementById("vcc").value = ccMatch ? ccMatch[1] : "";
+    
+    alert("Scan abgeschlossen. Bitte Daten kurz prüfen.");
+    // UI Refresh erzwingen (da wir app.innerHTML während Scan überschrieben haben)
+    // Wir lassen die Felder einfach so stehen, der User muss speichern.
+}
+
+// --- REST DER FUNKTIONEN (Original übernommen) ---
 
 function updateVehicleNote(ci, vi, note) {
     let c = get("customers", []);
@@ -219,19 +271,9 @@ function updateVehicleNote(ci, vi, note) {
 
 function deleteCustomer(ci) { if(confirm("Kunde wirklich löschen?")) { let c = get("customers", []); c.splice(ci, 1); set("customers", c); customers(); } }
 function deleteVehicle(ci, vi) { if(confirm("Fahrzeug wirklich löschen?")) { let c = get("customers", []); c[ci].vehicles.splice(vi, 1); set("customers", c); openCustomer(ci); } }
-function newVehicle(ci) { 
-    app.innerHTML = `<h3>Neues Fahrzeug</h3>
-    <button class="btn-work" onclick="triggerScan(${ci})">📷 Fahrzeugausweis scannen</button>
-    <hr>
-    <small>Marke</small><input id="vbrand" placeholder="Marke">
-    <small>Modell</small><input id="vmodel" placeholder="Modell">
-    <small>Kennzeichen</small><input id="vplate" placeholder="KENNZEICHEN" oninput="this.value = this.value.toUpperCase()">
-    <button class="btn-save" onclick="saveVehicle(${ci})">Speichern</button>
-    <button class="btn-sec" onclick="openCustomer(${ci})">Abbrechen</button>`; 
-}
-function saveVehicle(ci) { let c = get("customers", []); c[ci].vehicles.push({ brand: document.getElementById("vbrand").value, model: document.getElementById("vmodel").value, plate: document.getElementById("vplate").value, nextWorkNote: "", works: [] }); set("customers", c); openCustomer(ci); }
+function newVehicle(ci) { renderVehicleForm(ci, null, null); }
 
-function works(ci, vi) { let v = get("customers", [])[ci].vehicles[vi]; let h = `<h3>Rapporte: ${v.brand}</h3>`; v.works.forEach((w, wi) => h += `<div class="card ${w.closed?'locked':''}"><strong>${w.date} – ${w.types?.join(', ') || 'Rapport'}</strong><button onclick="openWork(${ci},${vi},${${wi}})">Details</button></div>`); app.innerHTML = h + `<button onclick="newWork(${ci},${vi})">+ Neuer Rapport</button><button class="btn-sec" onclick="openCustomer(${ci})">Zurück</button>`; }
+function works(ci, vi) { let v = get("customers", [])[ci].vehicles[vi]; let h = `<h3>Rapporte: ${v.brand}</h3>`; v.works.forEach((w, wi) => h += `<div class="card ${w.closed?'locked':''}"><strong>${w.date} – ${w.types?.join(', ') || 'Rapport'}</strong><button onclick="openWork(${ci},${vi},${wi})">Details</button></div>`); app.innerHTML = h + `<button onclick="newWork(${ci},${vi})">+ Neuer Rapport</button><button class="btn-sec" onclick="openCustomer(${ci})">Zurück</button>`; }
 function newWork(ci, vi) { let s = get("settings", {rate:50}); let c = get("customers", []); c[ci].vehicles[vi].works.push({ date: new Date().toLocaleDateString('de-CH'), km: "", types: [], mfkPoints: {}, tireData: {}, serviceFields: {}, fluids: {}, note: "", time: 0, partsList: [], workList: [], rate: s.rate, prices: {...s}, closed: false }); set("customers", c); openWork(ci, vi, c[ci].vehicles[vi].works.length - 1); }
 
 function openWork(ci, vi, wi) {
@@ -305,9 +347,23 @@ function renderDynamic(ci, vi, wi) {
 function setTireQty(k, q, ci, vi, wi) { let c = get("customers", []); c[ci].vehicles[vi].works[wi].tireData[k] = +q; set("customers", c); renderDynamic(ci, vi, wi); updateW(ci, vi, wi); }
 
 function renderParts(ci, vi, wi) { 
-    let w = get("customers", [])[ci].vehicles[vi].works[wi]; let d = w.closed ? "disabled" : ""; let html = "";
-    w.partsList.forEach((p, i) => { html += `<div class="row-flex"><input ${d} placeholder="Teil" value="${p.t}" oninput="updatePart(${ci},${vi},${wi},${i},'t',this.value)"><input ${d} type="number" placeholder="CHF" style="width:100px" value="${p.p||''}" oninput="updatePart(${ci},${vi},${wi},${i},'p',this.value)"><button ${d} class="btn-danger btn-minus" onclick="removePartRow(${ci},${vi},${wi},${i})">-</button></div>`; });
-    w.workList.forEach((work, i) => { html += `<div class="row-flex"><input ${d} placeholder="Arbeit" value="${work.t}" oninput="updateWorkRowItem(${ci},${vi},${wi},${i},'t',this.value)"><input ${d} type="number" step="0.1" placeholder="Std" style="width:100px" value="${work.h||''}" oninput="updateWorkRowItem(${ci},${vi},${wi},${i},'h',this.value)"><button ${d} class="btn-danger btn-minus" onclick="removeWorkRow(${ci},${vi},${wi},${i})">-</button></div>`; });
+    let w = get("customers", [])[ci].vehicles[vi].works[wi]; 
+    let d = w.closed ? "disabled" : ""; 
+    let html = "";
+    w.partsList.forEach((p, i) => {
+        html += `<div class="row-flex">
+            <input ${d} placeholder="Teil Bezeichnung" value="${p.t}" oninput="updatePart(${ci},${vi},${wi},${i},'t',this.value)">
+            <input ${d} type="number" placeholder="CHF" style="width:100px" value="${p.p||''}" oninput="updatePart(${ci},${vi},${wi},${i},'p',this.value)">
+            <button ${d} class="btn-danger btn-minus" onclick="removePartRow(${ci},${vi},${wi},${i})">-</button>
+        </div>`;
+    });
+    w.workList.forEach((work, i) => {
+        html += `<div class="row-flex">
+            <input ${d} placeholder="Arbeit Bezeichnung" value="${work.t}" oninput="updateWorkRowItem(${ci},${vi},${wi},${i},'t',this.value)">
+            <input ${d} type="number" step="0.1" placeholder="Std" style="width:100px" value="${work.h||''}" oninput="updateWorkRowItem(${ci},${vi},${wi},${i},'h',this.value)">
+            <button ${d} class="btn-danger btn-minus" onclick="removeWorkRow(${ci},${vi},${wi},${i})">-</button>
+        </div>`;
+    });
     document.getElementById("partsContainer").innerHTML = html;
 }
 
@@ -322,6 +378,8 @@ function toggleType(t,ci,vi,wi) {
     let c = get("customers", []); let w = c[ci].vehicles[vi].works[wi]; 
     w.types=w.types||[]; if(w.types.includes(t)) w.types=w.types.filter(x=>x!==t); else w.types.push(t); 
     set("customers", c); 
+    let repSec = document.getElementById("repairSection");
+    if(repSec) repSec.style.display = w.types.includes('Reparatur') ? 'block' : 'none';
     renderDynamic(ci,vi,wi); updateW(ci,vi,wi); 
 }
 function toggleMfk(p,ci,vi,wi) { let c = get("customers", []); let w = c[ci].vehicles[vi].works[wi]; w.mfkPoints[p]=!w.mfkPoints[p]; set("customers", c); renderDynamic(ci,vi,wi); updateW(ci,vi,wi); }
@@ -346,7 +404,7 @@ function calcTotal(w) {
     let fT = 0; Object.keys(LABELS).forEach(k => fT += (parseFloat(w.fluids[k])||0) * (w.prices[k]||0));
     let pT = w.partsList.reduce((sum, p) => sum + (+p.p || 0), 0);
     let workListTotal = (w.workList || []).reduce((sum, wk) => sum + ((+wk.h || 0) * w.rate), 0);
-    let sE = (w.serviceFields?.inspection||0)*w.rate + (w.serviceFields?.oilFilter||0) + (w.serviceFields?.pollenFilter||0) + (w.serviceFields?.airFilter||0) + (w.serviceFields?.fuelFilter||0) + (w.serviceFields?.plugs||0) + (w.serviceFields?.plugsT||0)*w.rate + (w.serviceFields?.belt||0) + (w.serviceFields?.beltT||0)*w.rate + (w.serviceFields?.pump||0) + (w.serviceFields?.ribbedM||0);
+    let sE = (w.serviceFields.inspection||0)*w.rate + (w.serviceFields.oilFilter||0) + (w.serviceFields.pollenFilter||0) + (w.serviceFields.airFilter||0) + (w.serviceFields.fuelFilter||0) + (w.serviceFields.plugs||0) + (w.serviceFields.plugsT||0)*w.rate + (w.serviceFields.belt||0) + (w.serviceFields.beltT||0)*w.rate + (w.serviceFields.pump||0) + (w.serviceFields.ribbedM||0);
     let mE = (w.mfkPrepTime || 0) * w.rate;
     let cleanE = (w.mfkPoints["Motor & Karosserie gereinigt"]) ? (w.prices.cleanPrice || 0) : 0;
     let tireE = 0; Object.keys(TIRE_LABELS).forEach(k => tireE += (w.tireData[k] || 0) * (w.prices[k] || 0));
