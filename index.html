@@ -30,7 +30,7 @@
         h4 { margin: 15px 0 5px 0; color: #eee; border-bottom: 1px solid #333; padding-bottom: 5px; }
         small { display: block; margin-top: 4px; color: var(--text-dim); font-size: 12px; }
         hr { border: 0; border-top: 1px solid #333; margin: 20px 0; }
-        .btn-minus { width: 44px; height: 44px; padding: 0; flex-shrink: 0; margin: 0; display: flex; align-items: center; justify-content: center; font-size: 24px; }
+        .btn-minus { width: 44px; height: 44px; padding: 0; flex-shrink: 0; margin: 0; display: flex; align-items: center; justify-content: center; font-size: 24px; border-radius: 8px; }
     </style>
 </head>
 <body>
@@ -124,7 +124,7 @@ function openWork(ci, vi, wi) {
     <div id="repairSection" style="display:${w.types?.includes('Reparatur')?'block':'none'}">
         <h4>Sonstige Teile / Arbeit</h4>
         <div id="partsContainer"></div>
-        <div class="row-flex">
+        <div class="row-flex" style="margin-top:10px;">
             <button ${dis} class="btn-save" onclick="addPartRow(${ci},${vi},${wi})">+ Teile</button>
             <button ${dis} class="btn-work" onclick="addWorkRow(${ci},${vi},${wi})">+ Arbeit</button>
         </div>
@@ -188,6 +188,7 @@ function renderParts(ci, vi, wi) {
     let dis = w.closed ? "disabled" : ""; 
     let html = "";
     
+    // Teile Zeilen
     w.partsList.forEach((p, i) => {
         html += `<div class="row-flex">
             <input ${dis} placeholder="Teil Bezeichnung" value="${p.t}" oninput="updatePart(${ci},${vi},${wi},${i},'t',this.value)">
@@ -196,6 +197,7 @@ function renderParts(ci, vi, wi) {
         </div>`;
     });
 
+    // Arbeit Zeilen
     w.workList.forEach((work, i) => {
         html += `<div class="row-flex">
             <input ${dis} placeholder="Arbeit Bezeichnung" value="${work.t}" oninput="updateWorkRowItem(${ci},${vi},${wi},${i},'t',this.value)">
