@@ -39,12 +39,13 @@
         @media print {
             body * { visibility: hidden; background: white !important; color: black !important; }
             #printArea, #printArea * { visibility: visible; }
-            #printArea { position: absolute; left: 0; top: 0; width: 100%; padding: 20px; font-size: 12px; }
+            #printArea { position: absolute; left: 0; top: 0; width: 100%; padding: 0; font-size: 12px; }
             .no-print { display: none !important; }
             .inv-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
             .inv-table th { border-bottom: 2px solid #000; text-align: left; padding: 8px; }
             .inv-table td { border-bottom: 1px solid #eee; padding: 8px; }
             .total-row { font-weight: bold; font-size: 16px; }
+            .address-container { display: flex; flex-direction: column; padding-top: 40mm; padding-left: 20mm; margin-bottom: 30mm; }
         }
     </style>
 </head>
@@ -64,12 +65,16 @@ const TIRE_LABELS = { t_mont: "Reifen montieren", t_vent: "Ventil", t_alu: "Ausw
 const get = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch(e) { return d; } };
 const set = (k, v) => localStorage.setItem(k, JSON.stringify(v));
 
-function startApp() { let s = get("settings", { pinActive: true }); if (s.pinActive) showPin(); else menu(); }
+// Leert den Rechnungsbereich, wenn man zurück navigiert
+function clearPrint() { document.getElementById("printArea").innerHTML = ""; }
+
+function startApp() { clearPrint(); let s = get("settings", { pinActive: true }); if (s.pinActive) showPin(); else menu(); }
 function showPin() { app.innerHTML = `<div style="text-align:center; padding-top:50px"><h3>Werkstatt-Login</h3><input id="pinInput" type="password" placeholder="PIN" style="text-align:center; font-size:24px"><button onclick="checkPin()">Öffnen</button></div>`; }
 function checkPin() { if(document.getElementById("pinInput").value === PIN) menu(); else alert("Falscher PIN"); }
-function menu() { app.innerHTML = `<button onclick="customers()">👥 Kundenverwaltung</button><button onclick="settings()">⚙️ Grundeinstellungen</button><button class="btn-sec" onclick="exportData()">💾 Daten-Backup</button>`; }
+function menu() { clearPrint(); app.innerHTML = `<button onclick="customers()">👥 Kundenverwaltung</button><button onclick="settings()">⚙️ Grundeinstellungen</button><button class="btn-sec" onclick="exportData()">💾 Daten-Backup</button>`; }
 
 function settings() {
+    clearPrint();
     let s = get("settings", { pinActive: true, rate: 50, oil: 15, coolant: 10, brake: 20, gear: 25, servo: 18, washer: 2, cleanPrice: 20, t_mont: 20, t_vent: 5, t_alu: 15, t_met: 10, t_clean: 10, t_store: 40, t_repair: 15 });
     app.innerHTML = `<h3>Grundeinstellungen</h3><small>PIN-Schutz</small><select id="pinActive"><option value="true" ${s.pinActive?'selected':''}>Aktiv</option><option value="false" ${!s.pinActive?'selected':''}>Aus</option></select>
     <small>Stundenansatz (CHF)</small><input id="rate" type="number" placeholder="CHF" value="${s.rate||''}">
@@ -87,6 +92,7 @@ function saveSettings() {
 }
 
 function customers() { 
+    clearPrint();
     let c = get("customers", []); 
     let h = `<h3>Kunden</h3>
              <input type="text" id="liveSearch" placeholder="Name, Firma, VIN oder Kennzeichen suchen..." oninput="performSearch()" style="border: 2px solid var(--accent);">
@@ -151,6 +157,7 @@ function performSearch() {
 }
 
 function openCustomer(ci) { 
+    clearPrint();
     let cust = get("customers", [])[ci]; 
     let nameStr = `${cust.lastname||''} ${cust.firstname||''} ${cust.company||''}`.trim();
     let h = `<h3>Fahrzeugliste: ${nameStr}</h3>`; 
@@ -259,6 +266,7 @@ function deleteCustomer(ci) { if(confirm("Kunde wirklich löschen?")) { let c = 
 function deleteVehicle(ci, vi) { if(confirm("Fahrzeug wirklich löschen?")) { let c = get("customers", []); c[ci].vehicles.splice(vi, 1); set("customers", c); openCustomer(ci); } }
 
 function works(ci, vi) { 
+    clearPrint();
     let v = get("customers", [])[ci].vehicles[vi]; 
     let h = `<h3>Rapporte: ${v.brand}</h3>`; 
     (v.works||[]).forEach((w, wi) => h += `<div class="card ${w.closed?'locked':''}"><strong>${w.date} – ${w.types?.join(', ') || 'Rapport'}</strong><button onclick="openWork(${ci},${vi},${wi})">Details</button></div>`); 
@@ -272,6 +280,7 @@ function newWork(ci, vi) {
 }
 
 function openWork(ci, vi, wi) {
+    clearPrint();
     let c = get("customers", []); let w = c[ci].vehicles[vi].works[wi]; let dis = w.closed ? "disabled" : "";
     app.innerHTML = `<h3>Rapport – ${w.date}</h3>
     <small>Arbeitsart</small>
@@ -317,7 +326,7 @@ function generateInvoice(ci, vi, wi) {
     if(sf.pump > 0) rows += `<tr><td>Wasserpumpe</td><td>1 Stk</td><td>${sf.pump}</td><td>${sf.pump.toFixed(2)}</td></tr>`;
     if(sf.ribbedM > 0) rows += `<tr><td>Keilrippenriemen</td><td>1 Stk</td><td>${sf.ribbedM}</td><td>${sf.ribbedM.toFixed(2)}</td></tr>`;
 
-    // Arbeitszeit (Service & MFK & Handmanuell)
+    // Arbeitszeit
     let totalH = (sf.inspection||0) + (sf.plugsT||0) + (sf.beltT||0) + (w.mfkPrepTime||0);
     (w.workList||[]).forEach(wk => totalH += (wk.h || 0));
     if(totalH > 0) rows += `<tr><td>Arbeitsaufwand total</td><td>${totalH.toFixed(1)} Std</td><td>${w.rate}</td><td>${(totalH * w.rate).toFixed(2)}</td></tr>`;
@@ -337,30 +346,39 @@ function generateInvoice(ci, vi, wi) {
     });
 
     const printHtml = `
-        <div style="display:flex; justify-content:space-between; margin-bottom:50px">
-            <div><strong>Meine Garage Pro</strong><br>Werkstattstrasse 1<br>8000 Zürich</div>
-            <div style="text-align:right">
-                <strong>${cust.company || ''}</strong><br>
-                ${cust.firstname} ${cust.lastname}<br>
-                ${cust.street}<br>
-                ${cust.zip} ${cust.city}
+        <div style="padding: 10mm 15mm;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:10mm">
+                <div><strong>AutoLog</strong><br>Werkstattstrasse 1<br>8000 Zürich</div>
+                <div></div>
             </div>
+            
+            <div class="address-container">
+                <strong>${cust.company || ''}</strong>
+                <span>${cust.firstname} ${cust.lastname}</span>
+                <span>${cust.street}</span>
+                <span>${cust.zip} ${cust.city}</span>
+            </div>
+
+            <div style="margin-bottom:15mm">
+                <h1 style="margin:0; font-size: 28px;">RECHNUNG</h1>
+                <div style="margin-top:5px">Datum: ${w.date} | KM-Stand: ${w.km}</div>
+            </div>
+
+            <div style="background:#f2f2f2; padding:8px; margin-bottom:10px; border-radius: 4px;">
+                <strong>Fahrzeug:</strong> ${v.brand} ${v.model} (${v.plate}) | <strong>VIN:</strong> ${v.vin || '-'}
+            </div>
+
+            <table class="inv-table">
+                <thead><tr><th>Bezeichnung</th><th>Menge</th><th>Preis</th><th>Betrag</th></tr></thead>
+                <tbody>${rows}</tbody>
+                <tfoot>
+                    <tr class="total-row">
+                        <td colspan="3" style="text-align:right; padding-top: 15px;">Gesamtbetrag CHF:</td>
+                        <td style="padding-top: 15px;">${calcTotal(w)}</td>
+                    </tr>
+                </tfoot>
+            </table>
         </div>
-        <div style="margin-bottom:30px">
-            <h1 style="margin:0">RECHNUNG</h1>
-            Datum: ${w.date} | KM-Stand: ${w.km}
-        </div>
-        <div style="background:#eee; padding:10px; margin-bottom:20px">
-            <strong>Fahrzeug:</strong> ${v.brand} ${v.model} (${v.plate}) | <strong>VIN:</strong> ${v.vin || '-'}
-        </div>
-        <table class="inv-table">
-            <thead><tr><th>Bezeichnung</th><th>Menge</th><th>Preis</th><th>Betrag</th></tr></thead>
-            <tbody>${rows}</tbody>
-            <tfoot>
-                <tr class="total-row"><td colspan="3" style="text-align:right">Gesamtbetrag CHF:</td><td>${calcTotal(w)}</td></tr>
-            </tfoot>
-        </table>
-        <div style="margin-top:50px">Zahlbar innert 30 Tagen. Vielen Dank für Ihr Vertrauen.</div>
     `;
 
     document.getElementById("printArea").innerHTML = printHtml;
@@ -388,7 +406,7 @@ function renderDynamic(ci, vi, wi) {
     }
     if(w.types?.includes("MFK")) {
         dHtml += `<h4>MFK Checkliste</h4><small>MFK richten (Std)</small><input ${dis} type="number" step="0.1" id="m_prep" placeholder="Std" value="${w.mfkPrepTime||''}" oninput="updateW(${ci},${vi},${wi})">
-        <div class="check-group">${["Licht geprüft","Licht eingestellt","Bremsen geprüft","Auspuff geprüft","Motor & Karosserie gereinigt"].map(p => `<label class="check-item"><input ${dis} type="checkbox" onchange="toggleMfk('${p}',${ci},${vi},${wi})" ${w.mfkPoints[p]?'checked':''}> <span>${p}</span> ${(p==="Motor & Karosserie gereinigt" && w.mfkPoints[p]) ? `<span class="price-tag">+ ${w.prices.cleanPrice}</span>` : ""}</label>`).join('')}</div>`;
+        <div class="check-group">${["Licht geprüft","Licht eingestellt","Bremsen geprüft","Auspuff geprüft","Motor & Karosserie gereinigt"].map(p => `<label class="check-item"><input ${dis} type="checkbox" onchange="toggleMfk('${p}',${ci},vi,wi)" ${w.mfkPoints[p]?'checked':''}> <span>${p}</span> ${(p==="Motor & Karosserie gereinigt" && w.mfkPoints[p]) ? `<span class="price-tag">+ ${w.prices.cleanPrice}</span>` : ""}</label>`).join('')}</div>`;
     }
     if(w.types?.includes("Reifenwechsel")) {
         dHtml += `<h4>Reifen Service</h4><div class="check-group">`;
