@@ -33,6 +33,7 @@
         .btn-minus { width: 44px; height: 44px; padding: 0; flex-shrink: 0; margin: 0; display: flex; align-items: center; justify-content: center; font-size: 24px; }
         .clickable-header { cursor: pointer; padding: 5px; border-radius: 5px; transition: background 0.2s; }
         .clickable-header:hover { background: #2c2c2e; }
+        .img-preview { width: 100%; border-radius: 8px; margin-top: 10px; display: none; cursor: pointer; border: 1px solid #444; }
     </style>
 </head>
 <body>
@@ -121,9 +122,39 @@ function openCustomer(ci) {
 function calcPS(kw) { return kw ? Math.round(kw * 1.35962) : ''; }
 function calcKW(ps) { return ps ? (ps / 1.35962).toFixed(1) : ''; }
 
-function editVehicle(ci, vi) {
-    let v = get("customers", [])[ci].vehicles[vi];
-    app.innerHTML = `<h3>Fahrzeugdaten</h3>
+function handleImage(input, previewId) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+            const canvas = document.createElement('canvas');
+            const MAX_WIDTH = 800;
+            let width = img.width;
+            let height = img.height;
+            if (width > MAX_WIDTH) {
+                height *= MAX_WIDTH / width;
+                width = MAX_WIDTH;
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, width, height);
+            const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
+            const preview = document.getElementById(previewId);
+            preview.src = dataUrl;
+            preview.style.display = "block";
+            preview.dataset.base64 = dataUrl;
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
+function vehicleFormHtml(v = {}, ci, vi = null) {
+    const isNew = vi === null;
+    return `<h3>${isNew ? 'Neues Fahrzeug' : 'Fahrzeugdaten'}</h3>
     <small>Kennzeichen</small><input id="vplate" value="${v.plate || ''}" oninput="this.value = this.value.toUpperCase()">
     <small>Marke</small><input id="vbrand" value="${v.brand || ''}">
     <small>Modell</small><input id="vmodel" value="${v.model || ''}">
@@ -140,8 +171,22 @@ function editVehicle(ci, vi) {
     <small>Motorcode</small><input id="vengine" value="${v.engine || ''}">
     <small>Spezielles / Notizfeld</small><textarea id="vspec" style="height:100px">${v.specNote || ''}</textarea>
     
-    <button class="btn-save" onclick="updateVehicleData(${ci},${vi})">Speichern</button>
+    <small>Fahrzeugausweis Bild</small>
+    <button class="btn-work" onclick="document.getElementById('vimgInput').click()">📸 Ausweis hochladen (Foto/Galerie)</button>
+    <input type="file" id="vimgInput" accept="image/*" style="display:none" onchange="handleImage(this, 'vpreview')">
+    <img id="vpreview" class="img-preview" src="${v.image || ''}" style="${v.image ? 'display:block' : ''}" data-base64="${v.image || ''}" onclick="window.open(this.src)">
+    
+    <button class="btn-save" onclick="updateVehicleData(${ci},${vi})">${isNew ? 'Fahrzeug anlegen' : 'Speichern'}</button>
     <button class="btn-sec" onclick="openCustomer(${ci})">Abbrechen</button>`;
+}
+
+function editVehicle(ci, vi) {
+    let v = get("customers", [])[ci].vehicles[vi];
+    app.innerHTML = vehicleFormHtml(v, ci, vi);
+}
+
+function newVehicle(ci) {
+    app.innerHTML = vehicleFormHtml({}, ci, null);
 }
 
 function updateVehicleData(ci, vi) {
@@ -152,7 +197,15 @@ function updateVehicleData(ci, vi) {
     }
 
     let c = get("customers", []);
-    let v = c[ci].vehicles[vi];
+    let v;
+    
+    if (vi === null) {
+        v = { works: [] };
+        c[ci].vehicles.push(v);
+        vi = c[ci].vehicles.length - 1;
+    } else {
+        v = c[ci].vehicles[vi];
+    }
     
     v.plate = document.getElementById("vplate").value;
     v.brand = document.getElementById("vbrand").value;
@@ -166,6 +219,7 @@ function updateVehicleData(ci, vi) {
     v.weight = document.getElementById("vweight").value;
     v.engine = document.getElementById("vengine").value;
     v.specNote = document.getElementById("vspec").value;
+    v.image = document.getElementById("vpreview").dataset.base64 || "";
 
     set("customers", c);
     openCustomer(ci);
@@ -179,30 +233,6 @@ function updateVehicleNote(ci, vi, note) {
 
 function deleteCustomer(ci) { if(confirm("Kunde wirklich löschen?")) { let c = get("customers", []); c.splice(ci, 1); set("customers", c); customers(); } }
 function deleteVehicle(ci, vi) { if(confirm("Fahrzeug wirklich löschen?")) { let c = get("customers", []); c[ci].vehicles.splice(vi, 1); set("customers", c); openCustomer(ci); } }
-
-function newVehicle(ci) { 
-    app.innerHTML = `<h3>Neues Fahrzeug</h3>
-    <small>Kennzeichen</small><input id="vplate" oninput="this.value = this.value.toUpperCase()">
-    <small>Marke</small><input id="vbrand">
-    <small>Modell</small><input id="vmodel">
-    <button class="btn-save" onclick="saveVehicle(${ci})">Anlegen & Details öffnen</button>
-    <button class="btn-sec" onclick="openCustomer(${ci})">Abbrechen</button>`; 
-}
-
-function saveVehicle(ci) { 
-    let c = get("customers", []); 
-    let newV = { 
-        brand: document.getElementById("vbrand").value, 
-        model: document.getElementById("vmodel").value, 
-        plate: document.getElementById("vplate").value, 
-        vin: "", stammnr: "", type: "", ccm: "", kw: "", firstDate: "", weight: "", engine: "", specNote: "",
-        nextWorkNote: "", 
-        works: [] 
-    }; 
-    c[ci].vehicles.push(newV); 
-    set("customers", c); 
-    editVehicle(ci, c[ci].vehicles.length - 1); 
-}
 
 function works(ci, vi) { let v = get("customers", [])[ci].vehicles[vi]; let h = `<h3>Rapporte: ${v.brand}</h3>`; v.works.forEach((w, wi) => h += `<div class="card ${w.closed?'locked':''}"><strong>${w.date} – ${w.types?.join(', ') || 'Rapport'}</strong><button onclick="openWork(${ci},${vi},${wi})">Details</button></div>`); app.innerHTML = h + `<button onclick="newWork(${ci},${vi})">+ Neuer Rapport</button><button class="btn-sec" onclick="openCustomer(${ci})">Zurück</button>`; }
 function newWork(ci, vi) { let s = get("settings", {rate:50}); let c = get("customers", []); c[ci].vehicles[vi].works.push({ date: new Date().toLocaleDateString('de-CH'), km: "", types: [], mfkPoints: {}, tireData: {}, serviceFields: {}, fluids: {}, note: "", time: 0, partsList: [], workList: [], rate: s.rate, prices: {...s}, closed: false }); set("customers", c); openWork(ci, vi, c[ci].vehicles[vi].works.length - 1); }
