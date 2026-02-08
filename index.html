@@ -310,72 +310,66 @@ function generateInvoice(ci, vi, wi) {
     
     let workRows = "";
     let partRows = "";
-    let totalH = 0;
 
-    // --- ARBEIT BERECHNEN ---
+    // --- ARBEIT EINZELN AUFLISTEN ---
     const sf = w.serviceFields || {};
-    totalH += (parseFloat(sf.inspection) || 0);
-    totalH += (parseFloat(sf.plugsT) || 0);
-    totalH += (parseFloat(sf.beltT) || 0);
-    totalH += (parseFloat(w.mfkPrepTime) || 0);
-    (w.workList || []).forEach(wk => totalH += (parseFloat(wk.h) || 0));
-
-    if(totalH > 0) {
-        workRows += `<tr><td>Arbeitsaufwand total</td><td>${totalH.toFixed(1)} Std</td><td>${w.rate.toFixed(2)}</td><td>${(totalH * w.rate).toFixed(2)}</td></tr>`;
+    if(parseFloat(sf.inspection) > 0) {
+        workRows += `<tr><td>Jahres Inspektion</td><td>${parseFloat(sf.inspection).toFixed(1)} Std</td><td>${w.rate.toFixed(2)}</td><td>${(sf.inspection * w.rate).toFixed(2)}</td></tr>`;
     }
+    if(parseFloat(sf.plugsT) > 0) {
+        workRows += `<tr><td>Zündkerzen ersetzen</td><td>${parseFloat(sf.plugsT).toFixed(1)} Std</td><td>${w.rate.toFixed(2)}</td><td>${(sf.plugsT * w.rate).toFixed(2)}</td></tr>`;
+    }
+    if(parseFloat(sf.beltT) > 0) {
+        workRows += `<tr><td>Zahnriemen ersetzen</td><td>${parseFloat(sf.beltT).toFixed(1)} Std</td><td>${w.rate.toFixed(2)}</td><td>${(sf.beltT * w.rate).toFixed(2)}</td></tr>`;
+    }
+    if(parseFloat(w.mfkPrepTime) > 0) {
+        workRows += `<tr><td>MFK bereitstellen / Arbeit</td><td>${parseFloat(w.mfkPrepTime).toFixed(1)} Std</td><td>${w.rate.toFixed(2)}</td><td>${(w.mfkPrepTime * w.rate).toFixed(2)}</td></tr>`;
+    }
+    (w.workList || []).forEach(wk => {
+        if(parseFloat(wk.h) > 0) {
+            workRows += `<tr><td>${wk.t || 'Arbeitsaufwand'}</td><td>${parseFloat(wk.h).toFixed(1)} Std</td><td>${w.rate.toFixed(2)}</td><td>${(wk.h * w.rate).toFixed(2)}</td></tr>`;
+        }
+    });
 
-    // --- TEILE BERECHNEN ---
-    // Flüssigkeiten
+    // --- TEILE / MATERIAL EINZELN ---
     Object.keys(LABELS).forEach(k => {
         let qty = parseFloat(w.fluids[k]);
         if(qty > 0) partRows += `<tr><td>${LABELS[k]}</td><td>${qty.toFixed(1)} L</td><td>${w.prices[k].toFixed(2)}</td><td>${(qty * w.prices[k]).toFixed(2)}</td></tr>`;
     });
-
-    // Service Teile
     const partsMap = { oilFilter: "Ölfilter", pollenFilter: "Pollenfilter", airFilter: "Luftfilter", fuelFilter: "Kraftstofffilter", plugs: "Zündkerzen (Satz)", belt: "Zahnriemensatz", pump: "Wasserpumpe", ribbedM: "Keilrippenriemen" };
     Object.keys(partsMap).forEach(key => {
         let price = parseFloat(sf[key]);
         if(price > 0) partRows += `<tr><td>${partsMap[key]}</td><td>1 Stk</td><td>${price.toFixed(2)}</td><td>${price.toFixed(2)}</td></tr>`;
     });
-
-    // MFK Reinigung
     if(w.mfkPoints?.["Motor & Karosserie gereinigt"]) {
         partRows += `<tr><td>Reinigung Motor & Karosserie</td><td>1</td><td>${w.prices.cleanPrice.toFixed(2)}</td><td>${w.prices.cleanPrice.toFixed(2)}</td></tr>`;
     }
-
-    // Reifen
     Object.keys(TIRE_LABELS).forEach(k => {
         let qty = parseInt(w.tireData[k]);
         if(qty > 0) partRows += `<tr><td>${TIRE_LABELS[k]}</td><td>${qty} Stk</td><td>${w.prices[k].toFixed(2)}</td><td>${(qty * w.prices[k]).toFixed(2)}</td></tr>`;
     });
-
-    // Sonstige Teile aus Reparatur-Liste
     (w.partsList || []).forEach(p => {
         let price = parseFloat(p.p);
         if(price > 0) partRows += `<tr><td>${p.t || 'Diverse Teile'}</td><td>1</td><td>${price.toFixed(2)}</td><td>${price.toFixed(2)}</td></tr>`;
     });
 
-    // --- BEMERKUNGEN ---
     let remarkHtml = w.note ? `<div class="remark-box"><strong>Bemerkungen:</strong><br>${w.note.replace(/\n/g, '<br>')}</div>` : "";
 
     const printHtml = `
-        <div style="padding: 10mm 15mm;">
+        <div style="padding: 10mm 15mm; font-family: sans-serif;">
             <div class="address-container">
                 <strong>${cust.company || ''}</strong><br>
                 ${cust.firstname} ${cust.lastname}<br>
                 ${cust.street}<br>
                 ${cust.zip} ${cust.city}
             </div>
-
             <div style="margin-bottom:10mm">
                 <h1 style="margin:0; font-size: 24px;">RECHNUNG</h1>
                 <div style="margin-top:5px">Datum: ${w.date} | KM-Stand: ${w.km}</div>
             </div>
-
             <div style="background:#f2f2f2; padding:8px; margin-bottom:10px; border-radius: 4px; font-size: 11px;">
                 <strong>Fahrzeug:</strong> ${v.brand} ${v.model} (${v.plate}) | <strong>VIN:</strong> ${v.vin || '-'}
             </div>
-
             <table class="inv-table">
                 <thead><tr><th>Bezeichnung</th><th>Menge</th><th>Preis</th><th>Betrag</th></tr></thead>
                 <tbody>
@@ -384,8 +378,8 @@ function generateInvoice(ci, vi, wi) {
                 </tbody>
                 <tfoot>
                     <tr class="total-row">
-                        <td colspan="3" style="text-align:right; padding-top: 15px;">Gesamtbetrag CHF:</td>
-                        <td style="padding-top: 15px;">${calcTotal(w)}</td>
+                        <td colspan="3" style="text-align:right; padding: 15px 8px;">Gesamtbetrag CHF:</td>
+                        <td style="padding: 15px 8px;">${calcTotal(w)}</td>
                     </tr>
                 </tfoot>
             </table>
