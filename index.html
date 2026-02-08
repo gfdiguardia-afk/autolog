@@ -130,11 +130,28 @@ function editVehicle(ci, vi) {
 
 function updateVehicleData(ci, vi) {
     let c = get("customers", []);
-    c[ci].vehicles[vi].brand = document.getElementById("vbrand").value;
-    c[ci].vehicles[vi].model = document.getElementById("vmodel").value;
-    c[ci].vehicles[vi].plate = document.getElementById("vplate").value;
-    set("customers", c);
-    openCustomer(ci);
+    let v = c[ci].vehicles[vi];
+    
+    let newBrand = document.getElementById("vbrand").value;
+    let newModel = document.getElementById("vmodel").value;
+    let newPlate = document.getElementById("vplate").value;
+
+    let changes = [];
+    if (v.brand !== newBrand) changes.push(`Marke: ${v.brand} -> ${newBrand}`);
+    if (v.model !== newModel) changes.push(`Modell: ${v.model} -> ${newModel}`);
+    if (v.plate !== newPlate) changes.push(`Kennzeichen: ${v.plate || '---'} -> ${newPlate}`);
+
+    if (changes.length > 0) {
+        if (confirm("Folgende Änderungen speichern?\n\n" + changes.join("\n"))) {
+            v.brand = newBrand;
+            v.model = newModel;
+            v.plate = newPlate;
+            set("customers", c);
+            openCustomer(ci);
+        }
+    } else {
+        openCustomer(ci); // Keine Änderungen
+    }
 }
 
 function updateVehicleNote(ci, vi, note) {
@@ -225,22 +242,22 @@ function setTireQty(k, q, ci, vi, wi) { let c = get("customers", []); c[ci].vehi
 
 function renderParts(ci, vi, wi) { 
     let w = get("customers", [])[ci].vehicles[vi].works[wi]; 
-    let dis = w.closed ? "disabled" : ""; 
+    let d = w.closed ? "disabled" : ""; 
     let html = "";
     
     w.partsList.forEach((p, i) => {
         html += `<div class="row-flex">
-            <input ${dis} placeholder="Teil Bezeichnung" value="${p.t}" oninput="updatePart(${ci},${vi},${wi},${i},'t',this.value)">
-            <input ${dis} type="number" placeholder="CHF" style="width:100px" value="${p.p||''}" oninput="updatePart(${ci},${vi},${wi},${i},'p',this.value)">
-            <button ${dis} class="btn-danger btn-minus" onclick="removePartRow(${ci},${vi},${wi},${i})">-</button>
+            <input ${d} placeholder="Teil Bezeichnung" value="${p.t}" oninput="updatePart(${ci},${vi},${wi},${i},'t',this.value)">
+            <input ${d} type="number" placeholder="CHF" style="width:100px" value="${p.p||''}" oninput="updatePart(${ci},${vi},${wi},${i},'p',this.value)">
+            <button ${d} class="btn-danger btn-minus" onclick="removePartRow(${ci},${vi},${wi},${i})">-</button>
         </div>`;
     });
 
     w.workList.forEach((work, i) => {
         html += `<div class="row-flex">
-            <input ${dis} placeholder="Arbeit Bezeichnung" value="${work.t}" oninput="updateWorkRowItem(${ci},${vi},${wi},${i},'t',this.value)">
-            <input ${dis} type="number" step="0.1" placeholder="Std" style="width:100px" value="${work.h||''}" oninput="updateWorkRowItem(${ci},${vi},${wi},${i},'h',this.value)">
-            <button ${dis} class="btn-danger btn-minus" onclick="removeWorkRow(${ci},${vi},${wi},${i})">-</button>
+            <input ${d} placeholder="Arbeit Bezeichnung" value="${work.t}" oninput="updateWorkRowItem(${ci},${vi},${wi},${i},'t',this.value)">
+            <input ${d} type="number" step="0.1" placeholder="Std" style="width:100px" value="${work.h||''}" oninput="updateWorkRowItem(${ci},${vi},${wi},${i},'h',this.value)">
+            <button ${d} class="btn-danger btn-minus" onclick="removeWorkRow(${ci},${vi},${wi},${i})">-</button>
         </div>`;
     });
 
